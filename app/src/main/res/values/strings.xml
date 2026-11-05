@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Gamerz</string>
+    <string name="choose_platform">Choose your platform</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="username">Username</string>
+    <string name="login">Log in</string>
+    <string name="signup">Create account</string>
+    <string name="create_post">Create post</string>
+    <string name="game_name">Game name</string>
+    <string name="completion">Completion percentage</string>
+    <string name="publish">Publish</string>
+    <string name="feed">Community feed</string>
+    <string name="pick_image">Choose game image</string>
+    <string name="platinum_question">Did you get the Platinum?</string>
+</resources>
