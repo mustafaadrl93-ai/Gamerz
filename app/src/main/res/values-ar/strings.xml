@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">قيمرز</string>
+    <string name="choose_platform">اختر منصة اللعب</string>
+    <string name="email">البريد الإلكتروني</string>
+    <string name="password">كلمة المرور</string>
+    <string name="username">اسم المستخدم</string>
+    <string name="login">تسجيل الدخول</string>
+    <string name="signup">إنشاء حساب</string>
+    <string name="create_post">إنشاء منشور</string>
+    <string name="game_name">اسم اللعبة</string>
+    <string name="completion">نسبة الإنجاز</string>
+    <string name="publish">نشر</string>
+    <string name="feed">منشورات المجتمع</string>
+    <string name="pick_image">اختر صورة اللعبة</string>
+    <string name="platinum_question">هل حصلت على البلاتينية؟</string>
+</resources>
