@@ -2,25 +2,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.token.admin == true; }
 
     match /users/{uid} {
-      // Profiles are public in Phase 1; private account data must live in a separate collection.
       allow read: if signedIn();
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['username', 'platform', 'createdAt'])
         && request.resource.data.username is string
-        && request.resource.data.username.matches('^[A-Za-z0-9]{2,20}$')
+        && request.resource.data.username.matches('^[A-Za-z0-9_]{2,20}$')
         && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC'];
-      allow update: if false;
-      allow delete: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username']);
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
     match /posts/{postId} {
       allow read: if signedIn();
-      // Posts are created only by the trusted createPost Cloud Function (Admin SDK).
-      allow create, update: if false;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      // Creation and deletion go through authenticated Cloud Functions.
+      allow create, update, delete: if false;
+    }
+
+    match /stories/{storyId} {
+      allow read: if signedIn() && resource.data.expiresAt > request.time;
+      allow write: if false;
+    }
+
+    match /reports/{reportId} {
+      allow read, write: if isAdmin();
     }
   }
 }
