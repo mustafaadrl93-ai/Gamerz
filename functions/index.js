@@ -6,13 +6,16 @@ const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestor
 initializeApp();
 const db = getFirestore();
 
+// The sole project owner. Authorization is enforced server-side by Firebase UID.
+const OWNER_UID = "NdoyBz3UMcWGWQ3DhuwrIbVbZvl2";
+
 function requireUser(request) {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   return request.auth.uid;
 }
 function requireAdmin(request) {
-  requireUser(request);
-  if (request.auth.token.admin !== true) throw new HttpsError("permission-denied", "Admin only.");
+  const uid = requireUser(request);
+  if (uid !== OWNER_UID) throw new HttpsError("permission-denied", "Owner only.");
 }
 function validUploadcare(url) {
   return typeof url === "string" && /^https:\/\/ucarecdn\.com\/[a-f0-9-]{20,40}\/$/.test(url);
@@ -75,7 +78,7 @@ exports.deletePost = onCall({ enforceAppCheck: true }, async (request) => {
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "Post not found.");
   const isOwner = snap.get("uid") === uid;
-  const isAdmin = request.auth.token.admin === true;
+  const isAdmin = uid === OWNER_UID;
   if (!isOwner && !isAdmin) throw new HttpsError("permission-denied", "You can delete only your own posts.");
   await ref.delete();
   return { deleted: true };
