@@ -6,7 +6,7 @@ on:
     branches: [ main, completion/gamerz-social-features, free-tier/firestore-client-backend ]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -31,6 +31,17 @@ jobs:
 
       - name: Show debug signing fingerprint
         run: gradle :app:signingReport
+
+      - name: Publish direct APK download
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "debug-build-${GITHUB_RUN_NUMBER}" \
+            app/build/outputs/apk/debug/app-debug.apk#Gamerz-debug.apk \
+            --title "Gamerz test build ${GITHUB_RUN_NUMBER}" \
+            --notes "Debug test build only. Not for Google Play distribution." \
+            --latest
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
