@@ -275,11 +275,35 @@ fun GamerzApp() {
                     when (page) {
                         "create" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             GamerzPageHeading("منشور جديد", "شارك اللعبة، تقييمك والإنجاز مع مجتمع Gamerz")
-                            OutlinedTextField(game, { game = it }, label = { Text("اسم اللعبة") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(completion, { completion = it.filter(Char::isDigit).take(3) }, label = { Text("نسبة الإنجاز 0–100") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(review, { review = it }, label = { Text("رأيك باللعبة (اختياري)") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) { Text("اختر صورة المنشور") }
-                            imageUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = null, modifier = Modifier.fillMaxWidth().height(150.dp)) }
+                            Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172C))) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    if (imageUri != null) {
+                                        Image(painter = rememberAsyncImagePainter(imageUri), contentDescription = "معاينة صورة اللعبة",
+                                            modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
+                                    } else {
+                                        Column(Modifier.fillMaxWidth().height(110.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(36.dp), tint = Color(0xFFC18BFF))
+                                            Text("صورة اللعبة مطلوبة", color = Color(0xFFCCB4E7))
+                                        }
+                                    }
+                                    OutlinedButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(Icons.Default.PhotoLibrary, null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("اختيار صورة")
+                                    }
+                                }
+                            }
+                            OutlinedTextField(game, { game = it.take(80) }, label = { Text("اسم اللعبة *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172C))) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("تقييمك للعبة *", fontWeight = FontWeight.Bold)
+                                    GamerzRatingStars(rating = rating, onRatingChange = { rating = it })
+                                    if (rating == 0) Text("اختر من 1 إلى 5 نجوم قبل النشر", color = Color(0xFFB9ADC9), style = MaterialTheme.typography.bodySmall)
+                                    OutlinedTextField(completion, { completion = it.filter(Char::isDigit).take(3) }, label = { Text("نسبة الإنجاز من 0 إلى 100% *") }, modifier = Modifier.fillMaxWidth())
+                                    GamerzCompletionBar(completion.toIntOrNull() ?: 0)
+                                }
+                            }
+                            OutlinedTextField(review, { review = it.take(500) }, label = { Text("رأيك باللعبة (اختياري)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
                             Button(enabled = !busy, onClick = {
                                 scope.launch {
                                     try {
