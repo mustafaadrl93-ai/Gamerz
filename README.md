@@ -1,57 +1,46 @@
 # Gamerz | قيمرز
 
-Native Android social app for gamers. Kotlin + Jetpack Compose, Firebase backend, Android / Google Play only.
+Native Android social app for gamers. Kotlin + Jetpack Compose, Firebase Authentication + Cloud Firestore, and Uploadcare for image hosting.
 
-## Phase 1 starter currently committed
+## Current implementation
+- Android app package: `com.gamerz.app`.
+- Email/password account creation and sign-in.
 - Platform selection: PlayStation, Xbox, PC.
-- Email/password sign-up and login.
-- User profile document stores username and selected platform.
-- Create game-progress posts with a required image, game name and completion 0–100.
-- Optional pros and cons.
-- Platinum prompt appears only for PlayStation at 100%; server function rejects invalid Platinum claims.
-- Images are compressed to JPEG before upload.
-- Firestore feed displays the latest 30 posts, including images.
-- Arabic and English string resource files; Android RTL support enabled.
-- Trusted callable Cloud Function validates post fields, author's saved platform, and uploaded image metadata before creating posts.
-- Firestore client-side post creation is denied; only the Admin SDK Cloud Function can create posts.
+- Basic player profile with editable username.
+- Community feed with game name, completion percentage, review text, and image.
+- Image upload through Uploadcare using the public project key.
+- Stories are shown while their expiry timestamp is within 24 hours.
+- Users can report posts; only the configured owner UID can view and moderate reports.
+- Users can delete their own posts; the owner can delete any post and stories.
+- Firestore Security Rules are in `firestore.rules`; publish them in the Firebase Console.
 
-## Firebase setup (beginner steps)
-1. Open https://console.firebase.google.com/ and create a Firebase project named Gamerz. Choose a region close to expected users; Firestore location cannot easily be changed later.
-2. Add an Android app with package name `com.gamerz.app`.
-3. Download `google-services.json` and place it inside the repository's `app/` folder. Do not upload service-account private keys.
-4. In Firebase Authentication → Sign-in method, enable Email/Password.
-5. In Firestore Database, create a database in the chosen region.
-6. In Storage, create the default bucket.
-7. Install Node.js 20 and Firebase CLI, sign in with `firebase login`, then from this project folder run `npm install --prefix functions`.
-8. Deploy rules and the Phase 1 callable function with `firebase deploy --only firestore:rules,storage,functions`.
-9. Open the project in Android Studio, sync Gradle, then run it on an Android device.
+## Free-tier architecture
+- The app writes directly to Cloud Firestore; these flows do not require callable Cloud Functions.
+- Firebase Storage is not used by the current app; uploaded images are hosted by Uploadcare.
+- Stories become hidden after 24 hours, but expired Firestore documents are not automatically purged on the Spark plan.
+- Deleting a Firestore post or story does not delete its Uploadcare image. A trusted server-side deletion process is still needed for full media deletion.
+- The public Uploadcare key is embedded in the app. Never embed an Uploadcare secret key or Firebase service-account credentials in the Android app or repository.
 
-## Phase 1 test checklist
-1. Create one account on PlayStation and another on Xbox.
-2. Sign in with each account and create a post with an image.
-3. Try publishing without an image or with completion 101; the app must reject it.
-4. On PlayStation, set completion to 100 and verify the Platinum question appears. Select yes and verify the crown on the post.
-5. On Xbox and PC, verify the Platinum question never appears.
-6. Try calling `createPost` with an invalid platform / Platinum combination; the server must reject it.
-7. Check the feed from both accounts.
+## Not implemented yet
+- Google Sign-In.
+- Actual language switcher / complete Arabic-English UI localization (resource files exist, but most screen text is still hard-coded).
+- Profile photo/avatar.
+- Likes, comments, search, follow/block, and notifications.
+- Automatic deletion of expired story records and Uploadcare files.
+- Account deletion flow and complete user-data export/deletion handling.
+- Firestore Emulator security-rule tests and verified two-account/device testing.
+- App Check enforcement verification for both debug and Play Integrity release builds.
+- Signed release APK / Android App Bundle and Google Play publication.
+- Final privacy-policy contact details and public hosting of the policy.
 
-## Not yet complete (planned follow-up)
-- Google sign-in, unique username reservation enforced transactionally on the server, account deletion.
-- App Check enforcement (enable after registering debug and Play Integrity providers).
-- Server-side image safety checks, moderation, appeals, reporting, blocking and rate limits.
-- Pull-to-refresh gesture, live feed listener, offline polish, full bilingual UI audit and accessibility.
-- Firestore Emulator security-rule tests and two-account private-data tests.
-- Pros/cons custom text styling, star rating, and additional post details.
-- Premium, intentionally deferred until core features work.
+## Build
+GitHub Actions workflow: `.github/workflows/android-build.yml`
+- Builds a **debug APK** on pushes to `main` and on manual dispatch.
+- Artifact name: `Gamerz-debug-apk` (ZIP containing `app-debug.apk`).
+- This debug APK is for testing, not a signed production release.
 
-## Security notes
-- Never commit service-account credentials or API secrets. Never put service-account credentials in the Android app.
-- The callable function currently has App Check enforcement disabled for initial setup; enable it before public release.
-- Firestore and Storage rules are starter rules and must be reviewed with Emulator Suite tests before production launch.
+## Privacy policy
+A draft is in `docs/privacy-policy.md`. Replace the support contact placeholder, review provider disclosures and retention practices, then publish it at a public URL before public release.
 
-## Free Firebase Spark mode (current app branch)
-- Post, story, report and moderation writes use Firestore directly with restrictive Firestore Security Rules; Cloud Functions are not required for these app flows.
-- Stories disappear from the app after 24 hours because reads are restricted to unexpired documents. Scheduled physical cleanup is not active on Spark; expired documents may remain in Firestore.
-- Uploadcare stores image files; deleting a Firestore post/story does not delete the corresponding Uploadcare file. Configure a trusted server-side deletion workflow before promising full media deletion.
-- Publish `firestore.rules` in Firebase Console before using this build. Do not enable App Check enforcement until the app's debug provider is registered and verified.
-- This branch still needs device testing and security-rule emulator tests before production release.
+## Release readiness
+This project is not yet production-ready. Test account creation/login, image uploads, post/story creation, deletion, reports, owner-only moderation, and security rules on real devices and with the Firestore Emulator before release.
