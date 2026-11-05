@@ -91,11 +91,13 @@ fun GamerzApp() {
     var pros by remember { mutableStateOf("") }
     var cons by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var storyUri by remember { mutableStateOf<Uri?>(null) }
     var platinum by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var posts by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var loggedIn by remember { mutableStateOf(auth.currentUser != null) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { imageUri = it }
+    val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { storyUri = it }
 
     MaterialTheme(colorScheme = lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF5B3DF5))) {
         Surface(Modifier.fillMaxSize()) {
@@ -125,6 +127,25 @@ fun GamerzApp() {
                     TextButton(onClick = { platform = "" }) { Text("Change platform") }
                 } else {
                     Text(stringResource(R.string.feed), style = MaterialTheme.typography.titleLarge)
+                    Text("Stories • 24 hours", style = MaterialTheme.typography.titleMedium)
+                    OutlinedButton(onClick = { storyPicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) { Text("Choose story image") }
+                    storyUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = "Story preview", modifier = Modifier.fillMaxWidth().height(110.dp)) }
+                    Button(onClick = { scope.launch {
+                        try {
+                            val uri = storyUri ?: error("Choose a story image first.")
+                            val bytes = context.contentResolver.openInputStream(uri).use { input ->
+                                val bitmap = android.graphics.BitmapFactory.decodeStream(input)
+                                val out = ByteArrayOutputStream()
+                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, out)
+                                out.toByteArray()
+                            }
+                            val (url, _) = uploadImageToUploadcare(bytes)
+                            functions.getHttpsCallable("createStory").call(mapOf("imageUrl" to url, "caption" to "")).await()
+                            storyUri = null
+                            message = "Story published for 24 hours"
+                        } catch (e: Exception) { message = e.message ?: "Story upload failed" }
+                    } }, modifier = Modifier.fillMaxWidth()) { Text("Publish story") }
+
                     OutlinedTextField(game, { game = it }, label = { Text(stringResource(R.string.game_name)) }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(completion, { completion = it.filter(Char::isDigit).take(3) }, label = { Text(stringResource(R.string.completion)) }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(pros, { pros = it }, label = { Text("Pros (optional)") }, modifier = Modifier.fillMaxWidth())
