@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
@@ -126,6 +127,9 @@ fun GamerzApp() {
     var username by remember { mutableStateOf("") }
     var game by remember { mutableStateOf("") }
     var completion by remember { mutableStateOf("0") }
+    var rating by remember { mutableIntStateOf(0) }
+    var searchQuery by remember { mutableStateOf("") }
+    var storyTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var review by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var storyUri by remember { mutableStateOf<Uri?>(null) }
@@ -152,11 +156,12 @@ fun GamerzApp() {
             }
     }
     suspend fun refreshStories() {
-        stories = db.collection("stories").whereGreaterThan("expiresAt", Timestamp.now())
-            .orderBy("expiresAt", com.google.firebase.firestore.Query.Direction.ASCENDING)
-            .limit(50).get().await().documents.mapNotNull { doc ->
+        val now = Timestamp.now().seconds
+        stories = db.collection("stories")
+            .orderBy("expiresAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(100).get().await().documents.mapNotNull { doc ->
                 doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
-            }
+            }.filter { (it["expiresAt"] as? Timestamp)?.seconds?.let { expiry -> expiry > now } == true }
     }
     suspend fun refreshReports() {
         if (!isOwner) return
@@ -269,8 +274,7 @@ fun GamerzApp() {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (page) {
                         "create" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("منشور جديد", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                            Text("شارك لعبتك ولحظة إنجازك مع المجتمع", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB9ADC9))
+                            GamerzPageHeading("منشور جديد", "شارك اللعبة، تقييمك والإنجاز مع مجتمع Gamerz")
                             OutlinedTextField(game, { game = it }, label = { Text("اسم اللعبة") }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(completion, { completion = it.filter(Char::isDigit).take(3) }, label = { Text("نسبة الإنجاز 0–100") }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(review, { review = it }, label = { Text("رأيك باللعبة (اختياري)") }, modifier = Modifier.fillMaxWidth())
@@ -281,23 +285,24 @@ fun GamerzApp() {
                                     try {
                                         busy = true
                                         val percent = completion.toIntOrNull() ?: error("أدخل نسبة صحيحة")
-                                        require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة 0–100 مطلوبة" }
+                                        require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة الإكمال مطلوبة" }
+                                        require(rating in 1..5) { "يجب اختيار تقييم من 1 إلى 5 نجوم قبل النشر" }
                                         val bytes = readCompressedImage(context, imageUri!!)
                                         val (url, uploadPath) = uploadImageToUploadcare(bytes)
                                         db.collection("posts").add(mapOf(
                                             "uid" to currentUid, "platform" to platform,
-                                            "gameName" to game.trim(), "completion" to percent,
+                                            "gameName" to game.trim(), "completion" to percent, "rating" to rating,
                                             "imageUrl" to url, "storagePath" to uploadPath,
                                             "pros" to review.trim().take(500), "cons" to "",
                                             "platinum" to false, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                             "likes" to 0, "commentCount" to 0
                                         )).await()
-                                        game = ""; completion = "0"; review = ""; imageUri = null
+                                        game = ""; completion = "0"; rating = 0; review = ""; imageUri = null
                                         message = "تم نشر المنشور"; page = "feed"; refreshFeed()
                                     } catch (e: Exception) { message = e.localizedMessage ?: "فشل النشر" }
                                     finally { busy = false }
                                 }
-                            }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "جارٍ النشر..." else "نشر") }
+                            }, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9131D6))) { Text(if (busy) "جارٍ النشر..." else "نشر المنشور", fontWeight = FontWeight.Bold) }
                         }
                         "profile" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF231B32))) {
