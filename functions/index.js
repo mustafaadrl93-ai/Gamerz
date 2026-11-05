@@ -17,7 +17,7 @@ exports.createPost = onCall({ enforceAppCheck: false }, async (request) => {
   const cons = typeof data.cons === "string" ? data.cons.trim().slice(0, 500) : "";
   if (!gameName || gameName.length > 80) throw new HttpsError("invalid-argument", "Game name is required (max 80 characters).");
   if (!Number.isInteger(completion) || completion < 0 || completion > 100) throw new HttpsError("invalid-argument", "Completion must be from 0 to 100.");
-  const uploadcareMatch = /^https:\/\/ucarecdn\\.com\/([a-f0-9-]{20,40})\/$/.exec(imageUrl);
+  const uploadcareMatch = /^https:\/\/ucarecdn\.com\/([a-f0-9-]{20,40})\/$/.exec(imageUrl);
   if (!uploadcareMatch || storagePath !== `uploadcare/${uploadcareMatch[1]}`) {
     throw new HttpsError("invalid-argument", "A valid Uploadcare game image is required.");
   }
