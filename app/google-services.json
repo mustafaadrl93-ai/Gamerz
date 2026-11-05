@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "451245527693",
+    "project_id": "gamerz-84c61",
+    "storage_bucket": "gamerz-84c61.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:451245527693:android:49f7cf32bd2825a00e08c4",
+        "android_client_info": {
+          "package_name": "com.gamerz.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJEPmK9Zb_i15FuQ68dIaFcVM0rr7IIoc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
