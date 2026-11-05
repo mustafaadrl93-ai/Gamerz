@@ -2,31 +2,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function validPost() {
-      return request.resource.data.keys().hasAll(['uid','gameName','completion','imageUrl','platform','platinum','createdAt','likes','commentCount'])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.gameName is string
-        && request.resource.data.gameName.size() > 0
-        && request.resource.data.gameName.size() <= 80
-        && request.resource.data.completion is int
-        && request.resource.data.completion >= 0 && request.resource.data.completion <= 100
-        && request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() > 0
-        && request.resource.data.platform in ['PlayStation','Xbox','PC']
-        && request.resource.data.platinum is bool
-        && (request.resource.data.platinum == false || (request.resource.data.platform == 'PlayStation' && request.resource.data.completion == 100));
-    }
+
     match /users/{uid} {
+      // Profiles are public in Phase 1; private account data must live in a separate collection.
       allow read: if signedIn();
-      allow create: if signedIn() && request.auth.uid == uid;
-      allow update, delete: if signedIn() && request.auth.uid == uid
-        && !request.resource.data.keys().hasAny(['isPremium']);
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['username', 'platform', 'createdAt'])
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[A-Za-z0-9]{2,20}$')
+        && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC'];
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
+
     match /posts/{postId} {
       allow read: if signedIn();
-      allow create: if false; // Posts are created only by the trusted createPost Cloud Function.
-      allow update, delete: if signedIn() && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gameName','completion','pros','cons','imageUrl','platinum']);
+      // Posts are created only by the trusted createPost Cloud Function (Admin SDK).
+      allow create, update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
   }
 }
