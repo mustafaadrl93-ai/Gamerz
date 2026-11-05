@@ -176,7 +176,7 @@ fun GamerzApp() {
     }
 
     fun pullToRefresh() {
-        if (refreshing) return
+        if (refreshing || busy) return
         scope.launch {
             refreshing = true
             try {
@@ -371,7 +371,6 @@ fun GamerzApp() {
                                         }
                                     }
                                 }
-                                Button(enabled = !busy && storyUri == null, onClick = { storyPicker.launch("image/*") }) { Text("اختيار صورة قصة") }
                                 storyUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = null, modifier = Modifier.fillMaxWidth().height(100.dp)) }
                                 if (storyUri != null) Button(enabled = !busy, onClick = {
                                     scope.launch {
@@ -401,13 +400,13 @@ fun GamerzApp() {
                                             Spacer(Modifier.width(10.dp))
                                             Column(Modifier.weight(1f)) {
                                                 Text(post["gameName"]?.toString() ?: "Game", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                                Text(post["platform"]?.toString().orEmpty(), style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9ADC9))
+                                                Text(post["platform"]?.toString()?.takeIf { it.isNotBlank() } ?: "لاعب Gamerz", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9ADC9))
                                             }
                                             Text("${post["completion"] ?: 0}%", color = Color(0xFFD6B9FF), fontWeight = FontWeight.Bold)
                                         }
-                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(260.dp))
+                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(260.dp))
                                         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                                            Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                                            if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
                                         Row(Modifier.padding(horizontal = 8.dp)) {
                                             TextButton(onClick = { reportTarget = post; reportReason = "" }) { Text("إبلاغ") }
