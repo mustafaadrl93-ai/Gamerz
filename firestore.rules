@@ -68,7 +68,7 @@ service cloud.firestore {
         && request.resource.data.caption.size() <= 180
         && request.resource.data.createdAt == request.time
         && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt <= request.time + duration.value(24, 'h');
+        && request.resource.data.expiresAt <= request.time + duration.value(24, 'h') + duration.value(2, 'm');
       allow update: if false;
       allow delete: if isAdmin();
     }
@@ -92,7 +92,8 @@ service cloud.firestore {
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy'])
         && request.resource.data.status in ['reviewed', 'dismissed']
-        && request.resource.data.reviewedBy == request.auth.uid;
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time;
       allow delete: if isAdmin();
     }
   }
