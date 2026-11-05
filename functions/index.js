@@ -1,7 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const { getStorage } = require("firebase-admin/storage");
 
 initializeApp();
 const db = getFirestore();
@@ -18,7 +17,10 @@ exports.createPost = onCall({ enforceAppCheck: false }, async (request) => {
   const cons = typeof data.cons === "string" ? data.cons.trim().slice(0, 500) : "";
   if (!gameName || gameName.length > 80) throw new HttpsError("invalid-argument", "Game name is required (max 80 characters).");
   if (!Number.isInteger(completion) || completion < 0 || completion > 100) throw new HttpsError("invalid-argument", "Completion must be from 0 to 100.");
-  if (!imageUrl || !storagePath || !storagePath.startsWith(`postImages/${uid}/`)) throw new HttpsError("invalid-argument", "A game image is required.");
+  const uploadcareMatch = /^https:\/\/ucarecdn\\.com\/([a-f0-9-]{20,40})\/$/.exec(imageUrl);
+  if (!uploadcareMatch || storagePath !== `uploadcare/${uploadcareMatch[1]}`) {
+    throw new HttpsError("invalid-argument", "A valid Uploadcare game image is required.");
+  }
   const userSnap = await db.collection("users").doc(uid).get();
   if (!userSnap.exists) throw new HttpsError("failed-precondition", "Complete your profile first.");
   const platform = userSnap.get("platform");
@@ -26,11 +28,6 @@ exports.createPost = onCall({ enforceAppCheck: false }, async (request) => {
   const platinum = data.platinum === true;
   if (platinum && !(platform === "PlayStation" && completion === 100)) {
     throw new HttpsError("invalid-argument", "Platinum is only available to PlayStation users at 100% completion.");
-  }
-  const bucket = getStorage().bucket();
-  const [file] = await bucket.file(storagePath).getMetadata().catch(() => [null]);
-  if (!file || !String(file.contentType || "").startsWith("image/") || Number(file.size || 0) > 8 * 1024 * 1024) {
-    throw new HttpsError("failed-precondition", "Upload a valid image (maximum 8 MB) before publishing.");
   }
   const post = {
     uid, platform, gameName, completion, imageUrl, storagePath, pros, cons,
