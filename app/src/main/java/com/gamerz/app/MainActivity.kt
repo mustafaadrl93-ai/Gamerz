@@ -401,9 +401,9 @@ fun GamerzApp() {
                                     }
                                     items(stories) { story ->
                                         Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            AsyncImage(model = story["imageUrl"], contentDescription = "قصة لاعب", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape))
-                                            Text("قصة لاعب", style = MaterialTheme.typography.labelSmall)
-                                            if (isOwner) TextButton(onClick = {
+                                            AsyncImage(model = story["imageUrl"], contentDescription = "عرض القصة", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape).clickable { storyTarget = story })
+                                            Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب", style = MaterialTheme.typography.labelSmall)
+                                            if (story["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
                                                     try {
                                                         db.collection("stories").document(story["_id"].toString()).delete().await()
@@ -414,7 +414,7 @@ fun GamerzApp() {
                                         }
                                     }
                                 }
-                                storyUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = null, modifier = Modifier.fillMaxWidth().height(100.dp)) }
+                                storyUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = "معاينة القصة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(16.dp))) }
                                 if (storyUri != null) Button(enabled = !busy, onClick = {
                                     scope.launch {
                                         try {
@@ -427,11 +427,13 @@ fun GamerzApp() {
                                                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                                 "expiresAt" to Timestamp(now.seconds + 24 * 60 * 60, now.nanoseconds)
                                             )).await()
-                                            storyUri = null; refreshStories(); message = "تم نشر القصة لمدة 24 ساعة"
+                                            storyUri = null; message = "تم نشر القصة لمدة 24 ساعة"
+                                            try { refreshStories() } catch (_: Exception) { message = "نُشرت القصة، لكن فشل تحديث القائمة. راجع قواعد Firebase." }
                                         } catch (e: Exception) { message = e.localizedMessage ?: "فشل نشر القصة" }
                                         finally { busy = false }
                                     }
-                                }) { Text("نشر القصة") }
+                                }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.AutoStories, contentDescription = null); Spacer(Modifier.width(8.dp)); Text(if (busy) "جارٍ نشر القصة..." else "نشر القصة") }
+                                if (storyUri != null) TextButton(onClick = { storyUri = null }) { Text("إلغاء") }
                                 if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.secondary)
                                 Spacer(Modifier.height(10.dp))
                             }
