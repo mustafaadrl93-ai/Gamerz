@@ -315,7 +315,7 @@ fun GamerzApp() {
                                     }
                                 }
                             }
-                            item { Text("حذف القصص المنتهية يتم تلقائيًا عبر وظيفة الخادم بعد نشرها.", style = MaterialTheme.typography.bodySmall) }
+                            item { Text("القصص تختفي بعد 24 ساعة، لكن حذف سجلاتها المنتهية تلقائيًا غير متاح على الخطة المجانية.", style = MaterialTheme.typography.bodySmall) }
                         } else Text("غير مصرح")
                         else -> LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
                             item {
