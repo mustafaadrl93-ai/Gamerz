@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
+import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
@@ -115,6 +116,7 @@ fun GamerzApp() {
                             )).await()
                             game = ""; completion = "0"; pros = ""; cons = ""; imageUri = null; platinum = false
                             message = "Post published"
+                            posts = db.collection("posts").orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(30).get().await().documents.mapNotNull { it.data }
                         } catch (e: Exception) { message = e.message ?: "Publish failed" }
                     } }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.publish)) }
                     Button(onClick = { scope.launch {
@@ -126,6 +128,7 @@ fun GamerzApp() {
                             Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(12.dp)) {
                                     Text(post["gameName"]?.toString() ?: "Game", style = MaterialTheme.typography.titleMedium)
+                                    AsyncImage(model = post["imageUrl"], contentDescription = post["gameName"]?.toString(), modifier = Modifier.fillMaxWidth().height(190.dp))
                                     Text("${post["completion"] ?: 0}% complete")
                                     if (post["platinum"] == true) Text("👑 PLATINUM")
                                     Text(post["pros"]?.toString() ?: "")
