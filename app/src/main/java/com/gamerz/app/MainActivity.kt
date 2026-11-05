@@ -23,7 +23,6 @@ import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.ByteArrayOutputStream
@@ -97,7 +96,6 @@ class MainActivity : ComponentActivity() {
 fun GamerzApp() {
     val auth = remember { FirebaseAuth.getInstance() }
     val db = remember { FirebaseFirestore.getInstance() }
-    val functions = remember { FirebaseFunctions.getInstance() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val currentUid = auth.currentUser?.uid.orEmpty()
@@ -254,10 +252,13 @@ fun GamerzApp() {
                                         require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة 0–100 مطلوبة" }
                                         val bytes = readCompressedImage(context, imageUri!!)
                                         val (url, uploadPath) = uploadImageToUploadcare(bytes)
-                                        functions.getHttpsCallable("createPost").call(mapOf(
+                                        db.collection("posts").add(mapOf(
+                                            "uid" to currentUid, "platform" to platform,
                                             "gameName" to game.trim(), "completion" to percent,
                                             "imageUrl" to url, "storagePath" to uploadPath,
-                                            "pros" to review, "cons" to "", "platinum" to false
+                                            "pros" to review.trim().take(500), "cons" to "",
+                                            "platinum" to false, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                            "likes" to 0, "commentCount" to 0
                                         )).await()
                                         game = ""; completion = "0"; review = ""; imageUri = null
                                         message = "تم نشر المنشور"; page = "feed"; refreshFeed()
@@ -295,7 +296,8 @@ fun GamerzApp() {
                                             TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        functions.getHttpsCallable("adminResolveReport").call(mapOf("reportId" to report["_id"], "status" to "reviewed")).await()
+                                                        db.collection("reports").document(report["_id"].toString())
+                                                            .update(mapOf("status" to "reviewed", "reviewedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(), "reviewedBy" to currentUid)).await()
                                                         refreshReports(); message = "تمت مراجعة البلاغ"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر تحديث البلاغ" }
                                                 }
@@ -303,7 +305,8 @@ fun GamerzApp() {
                                             TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        functions.getHttpsCallable("adminResolveReport").call(mapOf("reportId" to report["_id"], "status" to "dismissed")).await()
+                                                        db.collection("reports").document(report["_id"].toString())
+                                                            .update(mapOf("status" to "dismissed", "reviewedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(), "reviewedBy" to currentUid)).await()
                                                         refreshReports(); message = "تم إغلاق البلاغ"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر تحديث البلاغ" }
                                                 }
@@ -328,7 +331,7 @@ fun GamerzApp() {
                                             if (isOwner) TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        functions.getHttpsCallable("adminDeleteStory").call(mapOf("storyId" to story["_id"])).await()
+                                                        db.collection("stories").document(story["_id"].toString()).delete().await()
                                                         refreshStories(); message = "تم حذف القصة"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف القصة" }
                                                 }
@@ -344,7 +347,12 @@ fun GamerzApp() {
                                             busy = true
                                             val bytes = readCompressedImage(context, storyUri!!)
                                             val (url, _) = uploadImageToUploadcare(bytes)
-                                            functions.getHttpsCallable("createStory").call(mapOf("imageUrl" to url, "caption" to "")).await()
+                                            val now = Timestamp.now()
+                                            db.collection("stories").add(mapOf(
+                                                "uid" to currentUid, "imageUrl" to url, "caption" to "",
+                                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                "expiresAt" to Timestamp(now.seconds + 24 * 60 * 60, now.nanoseconds)
+                                            )).await()
                                             storyUri = null; refreshStories(); message = "تم نشر القصة لمدة 24 ساعة"
                                         } catch (e: Exception) { message = e.localizedMessage ?: "فشل نشر القصة" }
                                         finally { busy = false }
@@ -365,7 +373,7 @@ fun GamerzApp() {
                                             if (post["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        functions.getHttpsCallable("deletePost").call(mapOf("postId" to post["_id"])).await()
+                                                        db.collection("posts").document(post["_id"].toString()).delete().await()
                                                         refreshFeed(); message = "تم حذف المنشور"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف المنشور" }
                                                 }
@@ -395,8 +403,11 @@ fun GamerzApp() {
                 TextButton(onClick = {
                     scope.launch {
                         try {
-                            functions.getHttpsCallable("reportPost").call(mapOf(
-                                "postId" to target["_id"], "reason" to reportReason.trim()
+                            require(target["uid"] != currentUid) { "لا يمكنك الإبلاغ عن منشورك" }
+                            db.collection("reports").add(mapOf(
+                                "postId" to target["_id"].toString(), "postOwnerUid" to target["uid"].toString(),
+                                "reporterUid" to currentUid, "reason" to reportReason.trim().take(300),
+                                "status" to "open", "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                             )).await()
                             message = "تم إرسال البلاغ"; reportTarget = null
                         } catch (e: Exception) { message = e.localizedMessage ?: "تعذر إرسال البلاغ" }

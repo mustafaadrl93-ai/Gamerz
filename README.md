@@ -48,3 +48,10 @@ Native Android social app for gamers. Kotlin + Jetpack Compose, Firebase backend
 - Never commit service-account credentials or API secrets. Never put service-account credentials in the Android app.
 - The callable function currently has App Check enforcement disabled for initial setup; enable it before public release.
 - Firestore and Storage rules are starter rules and must be reviewed with Emulator Suite tests before production launch.
+
+## Free Firebase Spark mode (current app branch)
+- Post, story, report and moderation writes use Firestore directly with restrictive Firestore Security Rules; Cloud Functions are not required for these app flows.
+- Stories disappear from the app after 24 hours because reads are restricted to unexpired documents. Scheduled physical cleanup is not active on Spark; expired documents may remain in Firestore.
+- Uploadcare stores image files; deleting a Firestore post/story does not delete the corresponding Uploadcare file. Configure a trusted server-side deletion workflow before promising full media deletion.
+- Publish `firestore.rules` in Firebase Console before using this build. Do not enable App Check enforcement until the app's debug provider is registered and verified.
+- This branch still needs device testing and security-rule emulator tests before production release.

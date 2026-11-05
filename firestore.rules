@@ -2,7 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function isAdmin() { return signedIn() && request.auth.uid == 'NdoyBz3UMcWGWQ3DhuwrIbVbZvl2'; }
+    function isAdmin() {
+      return signedIn() && request.auth.uid == 'NdoyBz3UMcWGWQ3DhuwrIbVbZvl2';
+    }
+    function validImage(url) {
+      return url is string
+        && url.matches('^https://ucarecdn\\.com/[a-f0-9-]{20,40}/$');
+    }
 
     match /users/{uid} {
       allow read: if signedIn();
@@ -13,23 +19,81 @@ service cloud.firestore {
         && request.resource.data.username.matches('^[A-Za-z0-9_]{2,20}$')
         && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC'];
       allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username'])
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[A-Za-z0-9_]{2,20}$');
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
     match /posts/{postId} {
       allow read: if signedIn();
-      // Creation and deletion go through authenticated Cloud Functions.
-      allow create, update, delete: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'uid', 'platform', 'gameName', 'completion', 'imageUrl',
+          'storagePath', 'pros', 'cons', 'platinum', 'createdAt',
+          'likes', 'commentCount'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.platform == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.platform
+        && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC']
+        && request.resource.data.gameName is string
+        && request.resource.data.gameName.size() > 0
+        && request.resource.data.gameName.size() <= 80
+        && request.resource.data.completion is int
+        && request.resource.data.completion >= 0
+        && request.resource.data.completion <= 100
+        && validImage(request.resource.data.imageUrl)
+        && request.resource.data.storagePath is string
+        && request.resource.data.storagePath.matches('^uploadcare/[a-f0-9-]{20,40}$')
+        && request.resource.data.pros is string
+        && request.resource.data.pros.size() <= 500
+        && request.resource.data.cons is string
+        && request.resource.data.cons.size() <= 500
+        && request.resource.data.platinum == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.likes == 0
+        && request.resource.data.commentCount == 0;
+      allow update: if false;
+      allow delete: if signedIn()
+        && (isAdmin() || resource.data.uid == request.auth.uid);
     }
 
     match /stories/{storyId} {
       allow read: if signedIn() && resource.data.expiresAt > request.time;
-      allow write: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'imageUrl', 'caption', 'createdAt', 'expiresAt'])
+        && request.resource.data.uid == request.auth.uid
+        && validImage(request.resource.data.imageUrl)
+        && request.resource.data.caption is string
+        && request.resource.data.caption.size() <= 180
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(24, 'h');
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /reports/{reportId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'postId', 'postOwnerUid', 'reporterUid', 'reason', 'status', 'createdAt'
+        ])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.postId is string
+        && exists(/databases/$(database)/documents/posts/$(request.resource.data.postId))
+        && request.resource.data.postOwnerUid == get(/databases/$(database)/documents/posts/$(request.resource.data.postId)).data.uid
+        && request.resource.data.postOwnerUid != request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 300
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy'])
+        && request.resource.data.status in ['reviewed', 'dismissed']
+        && request.resource.data.reviewedBy == request.auth.uid;
+      allow delete: if isAdmin();
     }
   }
 }
