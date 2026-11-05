@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -54,6 +55,7 @@ private fun GamerzApp() {
     val storage = remember { FirebaseStorage.getInstance() }
     val functions = remember { FirebaseFunctions.getInstance() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var loggedIn by remember { mutableStateOf(auth.currentUser != null) }
     var page by remember { mutableStateOf("home") }
     var ar by remember { mutableStateOf(true) }
@@ -189,7 +191,7 @@ private fun GamerzApp() {
                                                 val value = percent.toIntOrNull() ?: error("Invalid completion")
                                                 require(game.isNotBlank() && value in 0..100 && photo != null) { "Game, image and completion 0-100 are required" }
                                                 val uid = auth.currentUser!!.uid
-                                                val bitmap = android.graphics.BitmapFactory.decodeStream(contentResolver.openInputStream(photo!!)) ?: error("Invalid image")
+                                                val bitmap = android.graphics.BitmapFactory.decodeStream(context.contentResolver.openInputStream(photo!!)) ?: error("Invalid image")
                                                 val out = java.io.ByteArrayOutputStream()
                                                 bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 84, out)
                                                 val ref = storage.reference.child("postImages/$uid/${System.currentTimeMillis()}.jpg")
