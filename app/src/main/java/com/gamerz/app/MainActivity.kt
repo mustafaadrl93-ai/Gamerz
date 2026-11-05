@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -364,11 +365,14 @@ fun GamerzApp() {
                                 Text("لحظات اللاعبين", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFFEAD9FF))
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                     item {
-                                        OutlinedButton(onClick = { storyPicker.launch("image/*") }, shape = RoundedCornerShape(24.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("قصتك") }
+                                        Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            OutlinedButton(onClick = { storyPicker.launch("image/*") }, modifier = Modifier.size(76.dp), contentPadding = PaddingValues(0.dp), shape = CircleShape) { Icon(Icons.Default.Add, contentDescription = "إضافة قصة") }
+                                            Text("قصتك", style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                     items(stories) { story ->
                                         Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            AsyncImage(model = story["imageUrl"], contentDescription = "قصة لاعب", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).clip(CircleShape))
+                                            AsyncImage(model = story["imageUrl"], contentDescription = "قصة لاعب", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape))
                                             Text("قصة لاعب", style = MaterialTheme.typography.labelSmall)
                                             if (isOwner) TextButton(onClick = {
                                                 scope.launch {
@@ -401,6 +405,16 @@ fun GamerzApp() {
                                 }) { Text("نشر القصة") }
                                 if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.secondary)
                                 Spacer(Modifier.height(10.dp))
+                            }
+                            if (posts.isEmpty() && !busy && !refreshing) item {
+                                Card(Modifier.fillMaxWidth().padding(vertical = 12.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF21182E))) {
+                                    Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFFC59AFF), modifier = Modifier.size(42.dp))
+                                        Text("ابدأ مجتمع اللاعبين", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Text("لا توجد منشورات بعد. شارك أول لعبة أنجزتها!", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB9ADC9))
+                                        Button(onClick = { page = "create" }) { Text("أنشئ منشورك") }
+                                    }
+                                }
                             }
                             items(posts) { post ->
                                 Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF191622))) {
