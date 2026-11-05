@@ -21,11 +21,52 @@ import coil.compose.rememberAsyncImagePainter
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+private const val UPLOADCARE_PUBLIC_KEY = "a019be01bbe664bae2db"
+
+private suspend fun uploadImageToUploadcare(bytes: ByteArray): Pair<String, String> = withContext(Dispatchers.IO) {
+    val boundary = "----GamerzUpload" + System.currentTimeMillis()
+    val connection = (URL("https://upload.uploadcare.com/base/").openConnection() as HttpURLConnection).apply {
+        requestMethod = "POST"
+        doOutput = true
+        connectTimeout = 30000
+        readTimeout = 60000
+        setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+    }
+    DataOutputStream(connection.outputStream).use { out ->
+        fun field(name: String, value: String) {
+            out.writeBytes("--$boundary\r\n")
+            out.writeBytes("Content-Disposition: form-data; name=\"$name\"\r\n\r\n")
+            out.write(value.toByteArray(Charsets.UTF_8))
+            out.writeBytes("\r\n")
+        }
+        field("UPLOADCARE_PUB_KEY", UPLOADCARE_PUBLIC_KEY)
+        field("UPLOADCARE_STORE", "1")
+        out.writeBytes("--$boundary\r\n")
+        out.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"gamerz.jpg\"\r\n")
+        out.writeBytes("Content-Type: image/jpeg\r\n\r\n")
+        out.write(bytes)
+        out.writeBytes("\r\n--$boundary--\r\n")
+    }
+    val status = connection.responseCode
+    val response = (if (status in 200..299) connection.inputStream else connection.errorStream)
+        ?.bufferedReader()?.use { it.readText() } ?: ""
+    connection.disconnect()
+    check(status in 200..299) { "Image upload failed ($status): $response" }
+    val fileId = JSONObject(response).getString("file")
+    val url = "https://ucarecdn.com/$fileId/"
+    Pair(url, "uploadcare/$fileId")
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,7 +79,6 @@ class MainActivity : ComponentActivity() {
 fun GamerzApp() {
     val auth = remember { FirebaseAuth.getInstance() }
     val db = remember { FirebaseFirestore.getInstance() }
-    val storage = remember { FirebaseStorage.getInstance() }
     val functions = remember { FirebaseFunctions.getInstance() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -106,12 +146,10 @@ fun GamerzApp() {
                                 bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, out)
                                 out.toByteArray()
                             }
-                            val ref = storage.reference.child("postImages/$uid/${System.currentTimeMillis()}.jpg")
-                            ref.putBytes(bytes).await()
-                            val url = ref.downloadUrl.await().toString()
+                            val (url, uploadPath) = uploadImageToUploadcare(bytes)
                             functions.getHttpsCallable("createPost").call(mapOf(
                                 "gameName" to game.trim(), "completion" to percent, "imageUrl" to url,
-                                "storagePath" to ref.path, "pros" to pros, "cons" to cons,
+                                "storagePath" to uploadPath, "pros" to pros, "cons" to cons,
                                 "platinum" to (platform == "PlayStation" && percent == 100 && platinum)
                             )).await()
                             game = ""; completion = "0"; pros = ""; cons = ""; imageUri = null; platinum = false
