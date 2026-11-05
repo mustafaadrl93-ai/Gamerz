@@ -10,6 +10,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
@@ -183,10 +186,10 @@ fun GamerzApp() {
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
-        primary = Color(0xFFB92FFF),
-        secondary = Color(0xFFE4C4FF),
+        primary = Color(0xFFAD65FF),
+        secondary = Color(0xFFD5BEFF),
         background = Color(0xFF090711),
-        surface = Color(0xFF191127)
+        surface = Color(0xFF181521)
     )) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (!loggedIn) {
@@ -250,8 +253,8 @@ fun GamerzApp() {
                 Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
-                            Text("♛ Gamerz", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                            Text("مجتمع اللاعبين العرب", style = MaterialTheme.typography.labelMedium)
+                            Text("GAMERZ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = Color.White)
+                            Text("اكتشف • شارك • أنجز", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9ADC9))
                         }
                         Icon(Icons.Default.SportsEsports, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     }
@@ -345,14 +348,14 @@ fun GamerzApp() {
                         else -> PullToRefreshBox(isRefreshing = refreshing, onRefresh = { pullToRefresh() }, modifier = Modifier.fillMaxSize()) {
                             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             item {
-                                Text("القصص • 24 ساعة", style = MaterialTheme.typography.titleMedium)
+                                Text("لحظات اللاعبين", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                     item {
-                                        OutlinedButton(onClick = { storyPicker.launch("image/*") }) { Text("+ قصتك") }
+                                        OutlinedButton(onClick = { storyPicker.launch("image/*") }, shape = RoundedCornerShape(24.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("قصتك") }
                                     }
                                     items(stories) { story ->
-                                        Column(Modifier.width(100.dp)) {
-                                            AsyncImage(model = story["imageUrl"], contentDescription = "Story", modifier = Modifier.size(92.dp))
+                                        Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            AsyncImage(model = story["imageUrl"], contentDescription = "قصة لاعب", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).clip(CircleShape))
                                             Text("قصة لاعب", style = MaterialTheme.typography.labelSmall)
                                             if (isOwner) TextButton(onClick = {
                                                 scope.launch {
@@ -388,13 +391,22 @@ fun GamerzApp() {
                                 Spacer(Modifier.height(10.dp))
                             }
                             items(posts) { post ->
-                                Card(Modifier.fillMaxWidth().padding(vertical = 6.dp), shape = RoundedCornerShape(16.dp)) {
-                                    Column(Modifier.padding(12.dp)) {
-                                        Text(post["gameName"]?.toString() ?: "Game", style = MaterialTheme.typography.titleMedium)
-                                        AsyncImage(model = post["imageUrl"], contentDescription = "Post image", modifier = Modifier.fillMaxWidth().height(210.dp))
-                                        Text("${post["completion"] ?: 0}% إنجاز")
-                                        Text(post["pros"]?.toString().orEmpty())
-                                        Row {
+                                Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF191622))) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.AccountCircle, contentDescription = null, tint = Color(0xFFB78AFF), modifier = Modifier.size(36.dp))
+                                            Spacer(Modifier.width(10.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(post["gameName"]?.toString() ?: "Game", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                                Text(post["platform"]?.toString().orEmpty(), style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9ADC9))
+                                            }
+                                            Text("${post["completion"] ?: 0}%", color = Color(0xFFD6B9FF), fontWeight = FontWeight.Bold)
+                                        }
+                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(260.dp))
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                                            Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        Row(Modifier.padding(horizontal = 8.dp)) {
                                             TextButton(onClick = { reportTarget = post; reportReason = "" }) { Text("إبلاغ") }
                                             if (post["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
