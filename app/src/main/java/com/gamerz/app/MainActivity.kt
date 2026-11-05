@@ -7,6 +7,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
@@ -254,22 +256,20 @@ fun GamerzApp() {
                     }
                 }
                 Column(Modifier.fillMaxSize()) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Color(0xFF241038), Color(0xFF120E1F)))).padding(horizontal = 18.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text("GAMERZ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = Color.White)
-                            Text("اكتشف • شارك • أنجز", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9ADC9))
+                            Text("GAMERZ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = Color(0xFFE4CCFF))
+                            Text("مساحتك للعب والإنجاز", style = MaterialTheme.typography.labelSmall, color = Color(0xFFC3B2D9))
                         }
-                        Icon(Icons.Default.SportsEsports, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Surface(shape = CircleShape, color = Color(0xFF33204D)) {
+                            Icon(Icons.Default.SportsEsports, contentDescription = "Gamerz", tint = Color(0xFFD4B1FF), modifier = Modifier.padding(10.dp).size(24.dp))
+                        }
                     }
-                    NavigationBar(containerColor = Color(0xFF150D21)) {
-                        NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
-                        NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null) }, label = { Text("نشر") })
-                        NavigationBarItem(selected = page == "profile", onClick = { page = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("ملفي") })
-                        if (isOwner) NavigationBarItem(selected = page == "admin", onClick = { page = "admin"; refreshAll() }, icon = { Icon(Icons.Default.Security, null) }, label = { Text("الإدارة") })
-                    }
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (page) {
-                        "create" -> Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                            Text("منشور جديد", style = MaterialTheme.typography.titleLarge)
+                        "create" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("منشور جديد", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                            Text("شارك لعبتك ولحظة إنجازك مع المجتمع", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB9ADC9))
                             OutlinedTextField(game, { game = it }, label = { Text("اسم اللعبة") }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(completion, { completion = it.filter(Char::isDigit).take(3) }, label = { Text("نسبة الإنجاز 0–100") }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(review, { review = it }, label = { Text("رأيك باللعبة (اختياري)") }, modifier = Modifier.fillMaxWidth())
@@ -298,9 +298,19 @@ fun GamerzApp() {
                                 }
                             }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "جارٍ النشر..." else "نشر") }
                         }
-                        "profile" -> Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                            Text("ملفي الشخصي", style = MaterialTheme.typography.titleLarge)
-                            Text(auth.currentUser?.email.orEmpty())
+                        "profile" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF231B32))) {
+                                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.AccountCircle, contentDescription = null, tint = Color(0xFFC79AFF), modifier = Modifier.size(66.dp))
+                                    Spacer(Modifier.width(12.dp))
+                                    Column {
+                                        Text(username.ifBlank { "لاعب Gamerz" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                        Text(platform.ifBlank { "منصة غير محددة" }, color = Color(0xFFD8BBFF))
+                                        Text(auth.currentUser?.email.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
+                                    }
+                                }
+                            }
+                            Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
                             Text("منصة اللعب: $platform")
                             Button(onClick = {
@@ -351,7 +361,7 @@ fun GamerzApp() {
                         else -> PullToRefreshBox(isRefreshing = refreshing, onRefresh = { pullToRefresh() }, modifier = Modifier.fillMaxSize()) {
                             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             item {
-                                Text("لحظات اللاعبين", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Text("لحظات اللاعبين", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFFEAD9FF))
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                     item {
                                         OutlinedButton(onClick = { storyPicker.launch("image/*") }, shape = RoundedCornerShape(24.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("قصتك") }
@@ -402,9 +412,9 @@ fun GamerzApp() {
                                                 Text(post["gameName"]?.toString() ?: "Game", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                                 Text(post["platform"]?.toString()?.takeIf { it.isNotBlank() } ?: "لاعب Gamerz", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9ADC9))
                                             }
-                                            Text("${post["completion"] ?: 0}%", color = Color(0xFFD6B9FF), fontWeight = FontWeight.Bold)
+                                            Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
-                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(260.dp))
+                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(280.dp).background(Color(0xFF0E0B18)))
                                         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
@@ -425,7 +435,15 @@ fun GamerzApp() {
                         }
                         }
                     }
+                    }
                     if (message.isNotBlank() && page != "feed") Text(message, modifier = Modifier.padding(8.dp), color = MaterialTheme.colorScheme.secondary)
+                    NavigationBar(containerColor = Color(0xFF130F1D), tonalElevation = 8.dp, modifier = Modifier.fillMaxWidth()) {
+                        NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
+                        NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null) }, label = { Text("نشر") })
+                        NavigationBarItem(selected = page == "profile", onClick = { page = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("ملفي") })
+                        if (isOwner) NavigationBarItem(selected = page == "admin", onClick = { page = "admin"; refreshAll() }, icon = { Icon(Icons.Default.Security, null) }, label = { Text("الإدارة") })
+                    }
+
                 }
             }
         }
