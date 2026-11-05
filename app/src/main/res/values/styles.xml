@@ -1,0 +1,1 @@
+<resources><style name="Theme.Gamerz" parent="@android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:colorAccent">#5B3DF5</item><item name="android:windowLightStatusBar">true</item></style></resources>
