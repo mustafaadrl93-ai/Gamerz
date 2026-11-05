@@ -3,7 +3,7 @@ name: Android build
 on:
   workflow_dispatch:
   push:
-    branches: [ main, completion/gamerz-social-features ]
+    branches: [ main, completion/gamerz-social-features, free-tier/firestore-client-backend ]
 
 permissions:
   contents: read
