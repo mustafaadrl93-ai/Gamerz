@@ -1,6 +1,7 @@
 package com.gamerz.app
 
 import android.net.Uri
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,8 +32,9 @@ import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
-import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 
 private val Night = Color(0xFF101321)
@@ -52,7 +54,6 @@ class MainActivity : ComponentActivity() {
 private fun GamerzApp() {
     val auth = remember { FirebaseAuth.getInstance() }
     val db = remember { FirebaseFirestore.getInstance() }
-    val storage = remember { FirebaseStorage.getInstance() }
     val functions = remember { FirebaseFunctions.getInstance() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -191,14 +192,12 @@ private fun GamerzApp() {
                                                 val value = percent.toIntOrNull() ?: error("Invalid completion")
                                                 require(game.isNotBlank() && value in 0..100 && photo != null) { "Game, image and completion 0-100 are required" }
                                                 val uid = auth.currentUser!!.uid
-                                                val bitmap = android.graphics.BitmapFactory.decodeStream(context.contentResolver.openInputStream(photo!!)) ?: error("Invalid image")
-                                                val out = java.io.ByteArrayOutputStream()
-                                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 84, out)
-                                                val ref = storage.reference.child("postImages/$uid/${System.currentTimeMillis()}.jpg")
-                                                ref.putBytes(out.toByteArray()).await()
-                                                val url = ref.downloadUrl.await().toString()
+                                                val (url, uploadcareId) = withContext(Dispatchers.IO) {
+                                                    uploadImageToUploadcare(context, photo!!)
+                                                }
                                                 functions.getHttpsCallable("createPost").call(mapOf("gameName" to game.trim(), "completion" to value,
-                                                    "imageUrl" to url, "storagePath" to ref.path, "pros" to review, "cons" to "", "platinum" to false)).await()
+                                                    "imageUrl" to url, "storagePath" to "uploadcare/$uploadcareId",
+                                                    "imageProvider" to "uploadcare", "pros" to review, "cons" to "", "platinum" to false)).await()
                                                 game = ""; percent = "0"; review = ""; photo = null
                                                 message = if (ar) "تم النشر" else "Published"; page = "home"; refresh()
                                             } catch (e: Exception) { message = e.localizedMessage ?: "Publish failed" }
@@ -207,7 +206,7 @@ private fun GamerzApp() {
                                     }, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) {
                                         Text(if (busy) "..." else if (ar) "نشر المنشور" else "Publish")
                                     }
-                                    Text(if (ar) "رفع الصور يتطلب تفعيل Firebase Storage." else "Image uploads require Firebase Storage.", color = Grey, style = MaterialTheme.typography.bodySmall)
+                                    Text(if (ar) "رفع الصور عبر خدمة الصور." else "Images are uploaded securely through the image service.", color = Grey, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                             else -> {
@@ -266,6 +265,51 @@ private fun GamerzApp() {
             }
         }
     }
+}
+
+
+private const val UPLOADCARE_PUBLIC_KEY = "a019be01bbe664bae2db"
+
+private fun uploadImageToUploadcare(context: Context, uri: Uri): Pair<String, String> {
+    val bitmap = android.graphics.BitmapFactory.decodeStream(context.contentResolver.openInputStream(uri))
+        ?: error("Invalid image")
+    val bytes = java.io.ByteArrayOutputStream().use { output ->
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, output)
+        output.toByteArray()
+    }
+    bitmap.recycle()
+
+    val boundary = "----GamerzUpload" + java.util.UUID.randomUUID().toString().replace("-", "")
+    val connection = (java.net.URL("https://upload.uploadcare.com/base/").openConnection() as java.net.HttpURLConnection)
+    connection.requestMethod = "POST"
+    connection.doOutput = true
+    connection.connectTimeout = 30000
+    connection.readTimeout = 60000
+    connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+
+    java.io.DataOutputStream(connection.outputStream).use { stream ->
+        fun field(name: String, value: String) {
+            stream.writeBytes("--$boundary\r\n")
+            stream.writeBytes("Content-Disposition: form-data; name=\"$name\"\r\n\r\n")
+            stream.write(value.toByteArray(Charsets.UTF_8))
+            stream.writeBytes("\r\n")
+        }
+        field("UPLOADCARE_PUB_KEY", UPLOADCARE_PUBLIC_KEY)
+        field("UPLOADCARE_STORE", "auto")
+        stream.writeBytes("--$boundary\r\n")
+        stream.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"gamerz.jpg\"\r\n")
+        stream.writeBytes("Content-Type: image/jpeg\r\n\r\n")
+        stream.write(bytes)
+        stream.writeBytes("\r\n--$boundary--\r\n")
+    }
+
+    val status = connection.responseCode
+    val response = (if (status in 200..299) connection.inputStream else connection.errorStream)
+        ?.bufferedReader()?.use { it.readText() }.orEmpty()
+    connection.disconnect()
+    if (status !in 200..299) error("Image upload failed ($status): $response")
+    val uuid = org.json.JSONObject(response).getString("file")
+    return "https://ucarecdn.com/$uuid/" to uuid
 }
 
 @Composable
