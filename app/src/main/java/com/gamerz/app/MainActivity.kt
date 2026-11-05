@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -120,6 +122,7 @@ fun GamerzApp() {
     var storyUri by remember { mutableStateOf<Uri?>(null) }
     var loggedIn by remember { mutableStateOf(auth.currentUser != null) }
     var busy by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var page by remember { mutableStateOf("feed") }
     var posts by remember { mutableStateOf(listOf<Map<String, Any>>()) }
@@ -166,6 +169,19 @@ fun GamerzApp() {
         }
     }
 
+    fun pullToRefresh() {
+        if (refreshing) return
+        scope.launch {
+            refreshing = true
+            try {
+                refreshFeed()
+                refreshStories()
+            } catch (e: Exception) {
+                message = e.localizedMessage ?: "تعذر تحديث الصفحة"
+            } finally { refreshing = false }
+        }
+    }
+
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Color(0xFFB92FFF),
         secondary = Color(0xFFE4C4FF),
@@ -187,7 +203,7 @@ fun GamerzApp() {
                     } else {
                         OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب عند إنشاء حساب") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(email, { email = it }, label = { Text(stringResource(R.string.email)) }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(password, { password = it }, label = { Text(stringResource(R.string.password)) }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(password, { password = it }, label = { Text(stringResource(R.string.password)) }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                         Button(enabled = !busy, onClick = {
                             scope.launch {
                                 try {
@@ -237,7 +253,7 @@ fun GamerzApp() {
                             Text("♛ Gamerz", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
                             Text("مجتمع اللاعبين العرب", style = MaterialTheme.typography.labelMedium)
                         }
-                        TextButton(onClick = { refreshAll() }) { Text("تحديث") }
+                        Icon(Icons.Default.SportsEsports, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     }
                     NavigationBar(containerColor = Color(0xFF150D21)) {
                         NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
@@ -326,7 +342,8 @@ fun GamerzApp() {
                             }
                             item { Text("القصص تختفي بعد 24 ساعة، لكن حذف سجلاتها المنتهية تلقائيًا غير متاح على الخطة المجانية.", style = MaterialTheme.typography.bodySmall) }
                         } else Text("غير مصرح")
-                        else -> LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+                        else -> PullToRefreshBox(isRefreshing = refreshing, onRefresh = { pullToRefresh() }, modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             item {
                                 Text("القصص • 24 ساعة", style = MaterialTheme.typography.titleMedium)
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -391,6 +408,7 @@ fun GamerzApp() {
                                     }
                                 }
                             }
+                        }
                         }
                     }
                     if (message.isNotBlank() && page != "feed") Text(message, modifier = Modifier.padding(8.dp), color = MaterialTheme.colorScheme.secondary)
