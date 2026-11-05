@@ -23,7 +23,7 @@ service cloud.firestore {
     }
     match /posts/{postId} {
       allow read: if signedIn();
-      allow create: if signedIn() && validPost();
+      allow create: if false; // Posts are created only by the trusted createPost Cloud Function.
       allow update, delete: if signedIn() && resource.data.uid == request.auth.uid
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gameName','completion','pros','cons','imageUrl','platinum']);
