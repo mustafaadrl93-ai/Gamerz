@@ -176,7 +176,7 @@ fun GamerzApp() {
     }
 
     fun pullToRefresh() {
-        if (refreshing) return
+        if (refreshing || busy) return
         scope.launch {
             refreshing = true
             try {
