@@ -7,6 +7,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -159,15 +167,16 @@ fun GamerzApp() {
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
-        primary = androidx.compose.ui.graphics.Color(0xFF8B72FF),
-        secondary = androidx.compose.ui.graphics.Color(0xFF52E0C4),
-        background = androidx.compose.ui.graphics.Color(0xFF101321),
-        surface = androidx.compose.ui.graphics.Color(0xFF1B2235)
+        primary = Color(0xFFB92FFF),
+        secondary = Color(0xFFE4C4FF),
+        background = Color(0xFF090711),
+        surface = Color(0xFF191127)
     )) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (!loggedIn) {
-                Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.Center) {
-                    Text("GAMERZ", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.secondary)
+                Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1B0731), Color(0xFF090711), Color(0xFF140920)))).padding(22.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("♛  GAMERZ", style = MaterialTheme.typography.displayLarge, color = MaterialTheme.colorScheme.primary)
+                    Text("🎮  العب • شارك • اكتشف", style = MaterialTheme.typography.titleMedium)
                     Text("مجتمع اللاعبين", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(20.dp))
                     if (platform.isBlank()) {
@@ -225,16 +234,16 @@ fun GamerzApp() {
                 Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
-                            Text("GAMERZ", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary)
-                            Text("قيمرز • مجتمع اللاعبين", style = MaterialTheme.typography.labelMedium)
+                            Text("♛ Gamerz", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                            Text("مجتمع اللاعبين العرب", style = MaterialTheme.typography.labelMedium)
                         }
                         TextButton(onClick = { refreshAll() }) { Text("تحديث") }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        TextButton(onClick = { page = "feed" }) { Text("الرئيسية") }
-                        TextButton(onClick = { page = "create" }) { Text("نشر") }
-                        TextButton(onClick = { page = "profile" }) { Text("ملفي") }
-                        if (isOwner) TextButton(onClick = { page = "admin"; refreshAll() }) { Text("الإدارة") }
+                    NavigationBar(containerColor = Color(0xFF150D21)) {
+                        NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
+                        NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null) }, label = { Text("نشر") })
+                        NavigationBarItem(selected = page == "profile", onClick = { page = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("ملفي") })
+                        if (isOwner) NavigationBarItem(selected = page == "admin", onClick = { page = "admin"; refreshAll() }, icon = { Icon(Icons.Default.Security, null) }, label = { Text("الإدارة") })
                     }
                     when (page) {
                         "create" -> Column(Modifier.fillMaxWidth().padding(16.dp)) {
