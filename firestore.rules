@@ -78,6 +78,20 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
     }
 
+    // User requests for removal of third-party Uploadcare files.
+    // The account deletion flow removes Firestore content and Firebase Auth;
+    // media must subsequently be purged with trusted Uploadcare credentials.
+    match /deletionRequests/{deletionId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'imagePaths', 'createdAt', 'status'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.imagePaths is list
+        && request.resource.data.imagePaths.size() <= 500
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if isAdmin();
+    }
+
     match /reports/{reportId} {
       allow read: if isAdmin();
       allow create: if signedIn()
