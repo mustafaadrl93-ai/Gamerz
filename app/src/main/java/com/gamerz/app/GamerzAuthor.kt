@@ -1,6 +1,7 @@
 package com.gamerz.app
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -23,7 +24,8 @@ fun GamerzPostAuthor(
     uid: String,
     fallbackPlatform: String,
     db: FirebaseFirestore,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenProfile: (String) -> Unit = {}
 ) {
     var name by remember(uid) { mutableStateOf("لاعب Gamerz") }
     var platform by remember(uid, fallbackPlatform) { mutableStateOf(fallbackPlatform) }
@@ -42,9 +44,9 @@ fun GamerzPostAuthor(
         }
     }
 
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.clickable(enabled = uid.isNotBlank()) { onOpenProfile(uid) }, verticalAlignment = Alignment.CenterVertically) {
         if (avatarUrl.isNotBlank()) {
-            AsyncImage(model = avatarUrl, contentDescription = "صورة " + name,
+            AsyncImage(model = avatarUrl.replace("https://ucarecdn.com/", "https://26vsxjozef.ucarecd.net/"), contentDescription = "صورة " + name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(43.dp).border(2.dp, Color(0xFFC36CFF), CircleShape)
                     .padding(3.dp).clip(CircleShape))
