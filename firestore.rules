@@ -64,12 +64,17 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if signedIn()
           && request.auth.uid == uid
+          && exists(/databases/$(database)/documents/users/$(uid))
           && dayId == string(request.time.year()) + '-' +
             string(request.time.dayOfYear())
           && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
           && request.resource.data.uid == uid
           && request.resource.data.createdAt == request.time;
-        allow update, delete: if false;
+        allow update: if false;
+        // Cleanup can happen only after the account's user document is deleted.
+        allow delete: if signedIn()
+          && request.auth.uid == uid
+          && !exists(/databases/$(database)/documents/users/$(uid));
       }
 
       // Private personal game library.
