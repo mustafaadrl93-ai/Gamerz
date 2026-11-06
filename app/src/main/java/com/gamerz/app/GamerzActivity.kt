@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -20,15 +21,22 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 
-private data class ActivityEvent(val label: String, val details: String, val timestamp: Long, val liked: Boolean)
+private data class ActivityEvent(
+    val label: String, val details: String, val timestamp: Long,
+    val liked: Boolean, val followed: Boolean = false
+)
 
 @Composable
-fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: FirebaseFirestore) {
+fun GamerzActivityScreen(
+    posts: List<Map<String, Any>>, uid: String,
+    db: FirebaseFirestore, blockedUsers: Set<String> = emptySet()
+) {
     var events by remember { mutableStateOf(listOf<ActivityEvent>()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
+    var refresh by remember(uid) { mutableIntStateOf(0) }
 
-    LaunchedEffect(uid, posts) {
+    LaunchedEffect(uid, posts, refresh, blockedUsers) {
         loading = true
         error = ""
         try {
@@ -40,7 +48,7 @@ fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: Firebas
                 val likes = postRef.collection("likes").orderBy("createdAt", Query.Direction.DESCENDING)
                     .limit(5).get().await().documents
                 for (like in likes) {
-                    if (like.getString("uid") != uid) {
+                    if (like.getString("uid") != uid && like.getString("uid") !in blockedUsers) {
                         result.add(ActivityEvent("إعجاب بمنشورك", "أعجب لاعب بمنشورك عن " + game,
                             like.getTimestamp("createdAt")?.seconds ?: 0L, true))
                     }
@@ -48,12 +56,26 @@ fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: Firebas
                 val comments = postRef.collection("comments").orderBy("createdAt", Query.Direction.DESCENDING)
                     .limit(5).get().await().documents
                 for (comment in comments) {
-                    if (comment.getString("uid") != uid) {
+                    if (comment.getString("uid") != uid && comment.getString("uid") !in blockedUsers) {
                         val name = comment.getString("username").orEmpty().ifBlank { "لاعب" }
                         result.add(ActivityEvent("تعليق جديد من " + name,
                             "على " + game + ": " + comment.getString("text").orEmpty().take(85),
                             comment.getTimestamp("createdAt")?.seconds ?: 0L, false))
                     }
+                }
+            }
+            // Follow activity is stored as Firestore documents, so no push-service
+            // credentials or paid functions are needed for this in-app inbox.
+            val followers = db.collection("follows").whereEqualTo("targetUid", uid)
+                .limit(50).get().await().documents
+            for (follow in followers) {
+                val followerUid = follow.getString("followerUid").orEmpty()
+                if (followerUid.isNotBlank() && followerUid != uid && followerUid !in blockedUsers) {
+                    result.add(ActivityEvent(
+                        "متابع جديد 🎮", "لاعب جديد يتابع ملفك في Gamerz",
+                        follow.getTimestamp("createdAt")?.seconds ?: 0L,
+                        liked = false, followed = true
+                    ))
                 }
             }
             events = result.sortedByDescending { it.timestamp }
@@ -69,7 +91,14 @@ fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: Firebas
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(vertical = 12.dp)
     ) {
-        item { GamerzPageHeading("النشاط", "آخر الإعجابات والتعليقات على منشوراتك") }
+        item { GamerzPageHeading("النشاط", "الإعجابات والتعليقات والمتابعات الجديدة") }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                OutlinedButton(onClick = { refresh++ }, enabled = !loading) {
+                    Text("تحديث النشاط")
+                }
+            }
+        }
         if (loading) {
             item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 CircularProgressIndicator(color = Color(0xFFC271FF))
@@ -95,9 +124,9 @@ fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: Firebas
                 Card(shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF261D35))) {
                     Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (event.liked) Icons.Default.Favorite else Icons.Default.ChatBubble,
+                        Icon(if (event.followed) Icons.Default.PersonAdd else if (event.liked) Icons.Default.Favorite else Icons.Default.ChatBubble,
                             contentDescription = null,
-                            tint = if (event.liked) Color(0xFFFF608C) else Color(0xFFC789FF))
+                            tint = if (event.liked) Color(0xFFFF608C) else if (event.followed) Color(0xFFFFD378) else Color(0xFFC789FF))
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(event.label, fontWeight = FontWeight.Bold, color = Color.White)

@@ -166,8 +166,12 @@ fun GamerzApp() {
     var game by remember { mutableStateOf("") }
     var postTitle by remember { mutableStateOf("") }
     var completion by remember { mutableStateOf("0") }
+    var postPlatform by remember { mutableStateOf("") }
+    var earnedPlatinum by remember { mutableStateOf(false) }
     var rating by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
+    var searchPlatform by remember { mutableStateOf("all") }
+    var searchOnlyCompleted by remember { mutableStateOf(false) }
     var storyTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var review by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
@@ -176,6 +180,7 @@ fun GamerzApp() {
     var storyUploadCount by remember { mutableIntStateOf(0) }
     var feedMode by remember { mutableStateOf("forYou") }
     var followedUsers by remember { mutableStateOf(setOf<String>()) }
+    var blockedUsers by remember { mutableStateOf(setOf<String>()) }
     var playerResults by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var loggedIn by remember { mutableStateOf(auth.currentUser != null) }
     var busy by remember { mutableStateOf(false) }
@@ -254,6 +259,14 @@ fun GamerzApp() {
                 }.toSet()
         } catch (_: Exception) { /* Following feed remains available offline. */ }
     }
+    suspend fun refreshBlocks() {
+        if (currentUid.isBlank()) return
+        try {
+            blockedUsers = db.collection("blocks").document(currentUid)
+                .collection("users").limit(300).get().await()
+                .documents.map { it.id }.toSet()
+        } catch (_: Exception) { /* Keep already loaded content if offline. */ }
+    }
     fun refreshAll() {
         scope.launch {
             try {
@@ -261,6 +274,7 @@ fun GamerzApp() {
                 refreshFeed()
                 refreshStories()
                 refreshFollowing()
+                refreshBlocks()
                 if (isOwner) refreshReports()
             } catch (e: Exception) {
                 message = e.localizedMessage ?: "تعذر تحديث المحتوى"
@@ -276,6 +290,7 @@ fun GamerzApp() {
                 refreshFeed()
                 refreshStories()
                 refreshFollowing()
+                refreshBlocks()
             } catch (e: Exception) {
                 message = e.localizedMessage ?: "تعذر تحديث الصفحة"
             } finally { refreshing = false }
@@ -283,8 +298,11 @@ fun GamerzApp() {
     }
 
     val visiblePosts = if (feedMode == "following") {
-        posts.filter { it["uid"]?.toString().orEmpty() in followedUsers }
-    } else posts
+        posts.filter {
+            it["uid"]?.toString().orEmpty() in followedUsers &&
+                it["uid"]?.toString().orEmpty() !in blockedUsers
+        }
+    } else posts.filter { it["uid"]?.toString().orEmpty() !in blockedUsers }
     LaunchedEffect(page, searchQuery) {
         if (page == "search" && searchQuery.trim().length >= 2) {
             delay(350)
@@ -394,6 +412,7 @@ fun GamerzApp() {
                             username = user.getString("username").orEmpty()
                             selectedPlatforms = (user.get("platforms") as? List<*>)?.filterIsInstance<String>()?.toSet().orEmpty().ifEmpty { user.getString("platform")?.let { setOf(it) }.orEmpty() }
                             platform = selectedPlatforms.firstOrNull().orEmpty()
+                            postPlatform = platform
                             avatarUrl = user.getString("avatarUrl").orEmpty()
                             profileLoaded = true
                         } catch (_: Exception) { }
@@ -447,11 +466,49 @@ fun GamerzApp() {
                                 shape = RoundedCornerShape(16.dp))
                             Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172C))) {
                                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("المنصة الخاصة بهذا المنشور", fontWeight = FontWeight.Bold)
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        selectedPlatforms.sorted().forEach { choice ->
+                                            FilterChip(
+                                                selected = (postPlatform.ifBlank { platform }) == choice,
+                                                onClick = {
+                                                    postPlatform = choice
+                                                    if (choice != "PlayStation") earnedPlatinum = false
+                                                },
+                                                label = { Text(choice, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
                                     Text("تقييمك للعبة *", fontWeight = FontWeight.Bold)
                                     GamerzRatingStars(rating = rating, onRatingChange = { rating = it })
                                     if (rating == 0) Text("اختر من 1 إلى 5 نجوم قبل النشر", color = Color(0xFFB9ADC9), style = MaterialTheme.typography.bodySmall)
                                     OutlinedTextField(completion, { completion = it.filter(Char::isDigit).take(3) }, label = { Text("نسبة الإنجاز من 0 إلى 100% *") }, modifier = Modifier.fillMaxWidth())
                                     GamerzCompletionBar(completion.toIntOrNull() ?: 0)
+                                    if ((postPlatform.ifBlank { platform }) == "PlayStation" &&
+                                        completion.toIntOrNull() == 100) {
+                                        Surface(
+                                            color = Color(0xFF3A2A36),
+                                            shape = RoundedCornerShape(15.dp),
+                                            border = BorderStroke(1.dp, Color(0xFFE5BC74))
+                                        ) {
+                                            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically) {
+                                                Checkbox(
+                                                    checked = earnedPlatinum,
+                                                    onCheckedChange = { earnedPlatinum = it }
+                                                )
+                                                Column(Modifier.weight(1f)) {
+                                                    Text("🏆 هل حققت البلاتينيوم؟",
+                                                        color = Color(0xFFFFD579),
+                                                        fontWeight = FontWeight.Bold)
+                                                    Text("فعّلها فقط إذا حصلت على الكأس فعلاً",
+                                                        color = Color(0xFFE1CBB5),
+                                                        style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             OutlinedTextField(review, { review = it.take(500) }, label = { Text("رأيك باللعبة (اختياري)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
@@ -463,18 +520,23 @@ fun GamerzApp() {
                                         require(postTitle.trim().length in 2..100) { "عنوان المنشور مطلوب (من حرفين إلى 100 حرف)" }
                                         require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة الإكمال مطلوبة" }
                                         require(rating in 1..5) { "يجب اختيار تقييم من 1 إلى 5 نجوم قبل النشر" }
-                                        require(platform.isNotBlank()) { "اختر منصات اللعب واحفظها من صفحة ملفي قبل النشر" }
+                                        val chosenPlatform = postPlatform.ifBlank { platform }
+                                        require(chosenPlatform in selectedPlatforms) {
+                                            "اختر منصة منشور من منصاتك المسجلة في الملف"
+                                        }
+                                        val platinumClaim = chosenPlatform == "PlayStation" &&
+                                            percent == 100 && earnedPlatinum
                                         val bytes = readCompressedImage(context, imageUri!!)
                                         val (url, uploadPath) = uploadImageToUploadcare(bytes)
                                         db.collection("posts").add(mapOf(
-                                            "uid" to currentUid, "platform" to platform,
+                                            "uid" to currentUid, "platform" to chosenPlatform,
                                             "gameName" to game.trim(), "title" to postTitle.trim(), "completion" to percent, "rating" to rating,
                                             "imageUrl" to url, "storagePath" to uploadPath,
                                             "pros" to review.trim().take(500), "cons" to "",
-                                            "platinum" to false, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                            "platinum" to platinumClaim, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                             "likes" to 0, "commentCount" to 0
                                         )).await()
-                                        game = ""; postTitle = ""; completion = "0"; rating = 0; review = ""; imageUri = null
+                                        game = ""; postTitle = ""; completion = "0"; rating = 0; review = ""; imageUri = null; earnedPlatinum = false
                                         message = "تم نشر المنشور"; page = "feed"; refreshFeed()
                                     } catch (e: Exception) { message = e.localizedMessage ?: "فشل النشر" }
                                     finally { busy = false }
@@ -495,6 +557,8 @@ fun GamerzApp() {
                                         Text(username.ifBlank { "لاعب Gamerz" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                         GamerzPlatformBadge(platform)
                                         Text(auth.currentUser?.email.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
+                                        Spacer(Modifier.height(7.dp))
+                                        GamerzPlatinumCounter(currentUid, db)
                                     }
                                 }
                             }
@@ -512,6 +576,25 @@ fun GamerzApp() {
                                     GamerzFollowStats(profileUid = currentUid, db = db,
                                         modifier = Modifier.weight(2f))
                                 }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { page = "library" },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(16.dp)) {
+                                    Text("🎮 مكتبتي", fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(onClick = { page = "saved" },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(16.dp)) {
+                                    Text("🔖 المحفوظات")
+                                }
+                            }
+                            OutlinedButton(onClick = { page = "achievements" },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, Color(0xFFFFD078))) {
+                                Text("🏆 قاعة الإنجازات والتحديات الأسبوعية",
+                                    color = Color(0xFFFFDB98), fontWeight = FontWeight.Bold)
                             }
                             Text("قصصك النشطة: " + stories.count { it["uid"] == currentUid },
                                 style = MaterialTheme.typography.labelMedium, color = Color(0xFFB9ADC9))
@@ -582,7 +665,16 @@ fun GamerzApp() {
                             }
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; selectedPlatforms = emptySet(); avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
-                        "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db)
+                        "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db, blockedUsers = blockedUsers)
+                        "achievements" -> Column(Modifier.fillMaxSize()
+                            .verticalScroll(rememberScrollState()).padding(16.dp)) {
+                            GamerzAchievementsPanel(currentUid, db)
+                        }
+                        "library" -> GamerzLibraryScreen(currentUid, db)
+                        "saved" -> GamerzSavedScreen(currentUid, db, blockedUsers) { playerUid ->
+                            if (playerUid != currentUid) viewedProfileUid = playerUid
+                            else page = "profile"
+                        }
                         "search" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             GamerzPageHeading("استكشاف الألعاب", "ابحث في آخر المنشورات وأبرز إنجازات اللاعبين")
@@ -595,11 +687,35 @@ fun GamerzApp() {
                                 shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            Text("تصفية حسب المنصة", color = Color(0xFFE8CFFB),
+                                fontWeight = FontWeight.SemiBold)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                listOf("all", "PlayStation", "Xbox", "PC").forEach { choice ->
+                                    FilterChip(
+                                        selected = searchPlatform == choice,
+                                        onClick = { searchPlatform = choice },
+                                        label = { Text(if (choice == "all") "الكل" else choice,
+                                            style = MaterialTheme.typography.labelSmall) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(checked = searchOnlyCompleted,
+                                    onCheckedChange = { searchOnlyCompleted = it })
+                                Text("💯 المكتملة فقط", color = Color(0xFFEAD7F9))
+                            }
                             val results = posts.filter { post ->
-                                searchQuery.isBlank() ||
+                                val matches = searchQuery.isBlank() ||
                                     post["gameName"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
                                     post["title"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
                                     post["platform"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true)
+                                val matchedPlatform = searchPlatform == "all" ||
+                                    post["platform"] == searchPlatform
+                                matches && matchedPlatform &&
+                                    (!searchOnlyCompleted ||
+                                        (post["completion"] as? Number)?.toInt() == 100) &&
+                                    post["uid"]?.toString().orEmpty() !in blockedUsers
                             }
                             if (searchQuery.trim().length >= 2) {
                                 Text("اللاعبون", style = MaterialTheme.typography.titleMedium,
@@ -610,7 +726,8 @@ fun GamerzApp() {
                                         color = Color(0xFFB8A7CA))
                                 }
                                 playerResults.filter {
-                                    it["_uid"]?.toString() != currentUid
+                                    it["_uid"]?.toString() != currentUid &&
+                                        it["_uid"]?.toString().orEmpty() !in blockedUsers
                                 }.forEach { player ->
                                     val userId = player["_uid"]?.toString().orEmpty()
                                     Surface(
@@ -806,7 +923,9 @@ fun GamerzApp() {
                                             style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
-                                val featuredStories = stories.groupBy {
+                                val featuredStories = stories.filter {
+                                    it["uid"]?.toString().orEmpty() !in blockedUsers
+                                }.groupBy {
                                     it["uid"]?.toString().orEmpty()
                                 }.values.mapNotNull { accountStories ->
                                     accountStories.maxByOrNull {
@@ -964,7 +1083,7 @@ fun GamerzApp() {
                                     }
                                 }
                             }
-                            items(visiblePosts) { post ->
+                            items(visiblePosts, key = { it["_id"].toString() }) { post ->
                                 Card(Modifier.fillMaxWidth().padding(vertical = 7.dp),
                                     shape = RoundedCornerShape(24.dp),
                                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172A)),
@@ -993,6 +1112,18 @@ fun GamerzApp() {
                                                 style = MaterialTheme.typography.bodyMedium)
                                             GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
                                             GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
+                                            if (post["platinum"] == true &&
+                                                post["platform"] == "PlayStation" &&
+                                                (post["completion"] as? Number)?.toInt() == 100) {
+                                                Surface(shape = RoundedCornerShape(12.dp),
+                                                    color = Color(0xFF49301C),
+                                                    border = BorderStroke(1.dp, Color(0xFFE4B66C))) {
+                                                    Text("🏆 حققت البلاتينيوم",
+                                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                                        color = Color(0xFFFFDA8D),
+                                                        fontWeight = FontWeight.Bold)
+                                                }
+                                            }
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
                                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -1003,6 +1134,7 @@ fun GamerzApp() {
                                                 Spacer(Modifier.width(4.dp))
                                                 Text("التعليقات")
                                             }
+                                            GamerzSaveButton(currentUid, post["_id"].toString(), db)
                                             IconButton(onClick = {
                                                 val share = Intent(Intent.ACTION_SEND).apply {
                                                     type = "text/plain"
@@ -1161,6 +1293,18 @@ fun GamerzApp() {
                                 doc.reference.delete().await()
                             }
                             for (doc in ownedStories) doc.reference.delete().await()
+                            // Remove private library, bookmarks and block-list records.
+                            for (name in listOf("library")) {
+                                val docs = db.collection("users").document(uid)
+                                    .collection(name).get().await().documents
+                                for (item in docs) item.reference.delete().await()
+                            }
+                            for (collection in listOf("savedPosts", "blocks")) {
+                                val nested = if (collection == "savedPosts") "items" else "users"
+                                val docs = db.collection(collection).document(uid)
+                                    .collection(nested).get().await().documents
+                                for (item in docs) item.reference.delete().await()
+                            }
                             // Clean both sides of follow relationships before deleting the profile.
                             for (field in listOf("followerUid", "targetUid")) {
                                 val links = db.collection("follows").whereEqualTo(field, uid).get().await()
@@ -1175,6 +1319,8 @@ fun GamerzApp() {
                             platform = ""
                             posts = emptyList()
                             stories = emptyList()
+                            blockedUsers = emptySet()
+                            followedUsers = emptySet()
                             page = "feed"
                             showDeleteAccount = false
                             message = "حُذف الحساب من Firebase؛ طلب إزالة الصور بانتظار المعالجة."
@@ -1202,12 +1348,19 @@ fun GamerzApp() {
     viewedProfileUid?.let { targetUid ->
         GamerzPublicProfileSheet(
             targetUid = targetUid, currentUid = currentUid,
-            db = db, posts = posts, onDismiss = { viewedProfileUid = null }
+            db = db, posts = posts, onDismiss = { viewedProfileUid = null },
+            onBlockChanged = {
+                viewedProfileUid = null
+                scope.launch {
+                    refreshBlocks()
+                    refreshFollowing()
+                }
+            }
         )
     }
     storyTarget?.let { selected ->
         GamerzStoryViewer(
-            stories = stories,
+            stories = stories.filter { it["uid"]?.toString().orEmpty() !in blockedUsers },
             startStoryId = selected["_id"]?.toString().orEmpty(),
             currentUid = currentUid,
             isOwner = isOwner,
