@@ -297,6 +297,14 @@ fun GamerzApp() {
         }
     }
 
+    // Avoid leaving stale validation errors pinned under the progress screen.
+    LaunchedEffect(message, loggedIn) {
+        if (loggedIn && message.isNotBlank()) {
+            val shown = message
+            delay(6000L)
+            if (message == shown) message = ""
+        }
+    }
     val visiblePosts = if (feedMode == "following") {
         posts.filter {
             it["uid"]?.toString().orEmpty() in followedUsers &&
@@ -420,18 +428,10 @@ fun GamerzApp() {
                     }
                 }
                 Column(Modifier.fillMaxSize()) {
-                    Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Color(0xFF2A0D46), Color(0xFF110B20), Color(0xFF241039)))).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { page = "activity" }) {
-                            Icon(Icons.Default.NotificationsNone, contentDescription = "النشاط", tint = Color(0xFFE9D6FF))
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFFD9A3FF), modifier = Modifier.size(29.dp))
-                            Text("Gamerz", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = Color(0xFFF0DDFF))
-                        }
-                        IconButton(onClick = { page = "search" }) {
-                            Icon(Icons.Default.Search, contentDescription = "بحث", tint = Color(0xFFE9D6FF))
-                        }
-                    }
+                    GamerzOrbitTopBar(
+                        onActivity = { page = "activity" },
+                        onSearch = { page = "search" }
+                    )
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (page) {
                         "create" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -559,6 +559,8 @@ fun GamerzApp() {
                                         Text(auth.currentUser?.email.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
                                         Spacer(Modifier.height(7.dp))
                                         GamerzPlatinumCounter(currentUid, db)
+                                        Spacer(Modifier.height(7.dp))
+                                        GamerzOrbitRankPill(currentUid, db)
                                     }
                                 }
                             }
@@ -591,10 +593,23 @@ fun GamerzApp() {
                             }
                             OutlinedButton(onClick = { page = "achievements" },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(1.dp, Color(0xFFFFD078))) {
-                                Text("🏆 قاعة الإنجازات والتحديات الأسبوعية",
-                                    color = Color(0xFFFFDB98), fontWeight = FontWeight.Bold)
+                                shape = RoundedCornerShape(18.dp),
+                                border = BorderStroke(1.dp, Color(0xFFB88BF0)),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color(0xFF271B39))) {
+                                Icon(Icons.Default.AutoAwesome, null,
+                                    tint = Color(0xFFE0B6FF))
+                                Spacer(Modifier.width(9.dp))
+                                Text("✦ مسار الرتب والتحديات",
+                                    color = Color(0xFFEAD0FF), fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(onClick = { page = "membership" },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp)) {
+                                Icon(Icons.Default.Diamond, null,
+                                    tint = Color(0xFFFFCC8E))
+                                Spacer(Modifier.width(9.dp))
+                                Text("عضوية Gamerz • استعراض الخطط القادمة")
                             }
                             Text("قصصك النشطة: " + stories.count { it["uid"] == currentUid },
                                 style = MaterialTheme.typography.labelMedium, color = Color(0xFFB9ADC9))
@@ -666,10 +681,8 @@ fun GamerzApp() {
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; selectedPlatforms = emptySet(); avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
                         "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db, blockedUsers = blockedUsers)
-                        "achievements" -> Column(Modifier.fillMaxSize()
-                            .verticalScroll(rememberScrollState()).padding(16.dp)) {
-                            GamerzAchievementsPanel(currentUid, db)
-                        }
+                        "achievements" -> GamerzOrbitRankHub(currentUid, db)
+                        "membership" -> GamerzMembershipPreview(onBack = { page = "profile" })
                         "library" -> GamerzLibraryScreen(currentUid, db)
                         "saved" -> GamerzSavedScreen(currentUid, db, blockedUsers) { playerUid ->
                             if (playerUid != currentUid) viewedProfileUid = playerUid
@@ -1173,13 +1186,7 @@ fun GamerzApp() {
                     }
                     }
                     if (message.isNotBlank() && page != "feed") Text(message, modifier = Modifier.padding(8.dp), color = MaterialTheme.colorScheme.secondary)
-                    NavigationBar(containerColor = Color(0xFF130F1D), tonalElevation = 8.dp, modifier = Modifier.fillMaxWidth()) {
-                        NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
-                        NavigationBarItem(selected = page == "search", onClick = { page = "search" }, icon = { Icon(Icons.Default.Search, null) }, label = { Text("استكشاف") })
-                        NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null, tint = Color(0xFFC77CFF)) }, label = { Text("نشر") })
-                        NavigationBarItem(selected = page == "activity", onClick = { page = "activity" }, icon = { Icon(Icons.Default.Notifications, null) }, label = { Text("النشاط") })
-                        NavigationBarItem(selected = page == "profile", onClick = { page = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("ملفي") })
-                    }
+                    GamerzOrbitBottomBar(page = page, onNavigate = { page = it })
 
                 }
             }
