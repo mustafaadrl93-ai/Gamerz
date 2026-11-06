@@ -249,7 +249,11 @@ fun GamerzSaveButton(uid: String, postId: String, db: FirebaseFirestore) {
 }
 
 @Composable
-fun GamerzSavedScreen(uid: String, db: FirebaseFirestore, onProfile: (String) -> Unit) {
+fun GamerzSavedScreen(
+    uid: String, db: FirebaseFirestore,
+    blockedUsers: Set<String>,
+    onProfile: (String) -> Unit
+) {
     var savedPosts by remember(uid) { mutableStateOf(listOf<Map<String, Any>>()) }
     var loading by remember(uid) { mutableStateOf(true) }
     var message by remember(uid) { mutableStateOf("") }
@@ -292,7 +296,9 @@ fun GamerzSavedScreen(uid: String, db: FirebaseFirestore, onProfile: (String) ->
         if (savedPosts.isEmpty() && !loading) item {
             Text("لم تحفظ أي منشور بعد.", color = Color(0xFFCEB7DF))
         }
-        items(savedPosts, key = { it["_id"].toString() }) { post ->
+        items(savedPosts.filter {
+            it["uid"]?.toString().orEmpty() !in blockedUsers
+        }, key = { it["_id"].toString() }) { post ->
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF231A30)),
                 shape = RoundedCornerShape(19.dp)) {
                 Row(Modifier.fillMaxWidth().padding(9.dp),
