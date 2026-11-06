@@ -57,6 +57,26 @@ service cloud.firestore {
            request.resource.data.avatarStoragePath.matches('^uploadcare/[a-f0-9-]{20,40}$')));
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
 
+      // A unique server-verified UTC day per player prevents repeated check-ins.
+      // The day identifier is YEAR-DAY_OF_YEAR, e.g. 2026-311.
+      // Signed-in players can read attendance to display public activity ranks.
+      match /checkins/{dayId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && exists(/databases/$(database)/documents/users/$(uid))
+          && dayId == string(request.time.year()) + '-' +
+            string(request.time.dayOfYear())
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+          && request.resource.data.uid == uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        // Cleanup can happen only after the account's user document is deleted.
+        allow delete: if signedIn()
+          && request.auth.uid == uid
+          && !exists(/databases/$(database)/documents/users/$(uid));
+      }
+
       // Private personal game library.
       match /library/{gameId} {
         allow read: if signedIn() && request.auth.uid == uid;
@@ -255,6 +275,15 @@ service cloud.firestore {
 
     // Players may report inappropriate stories; only the owner reviews reports.
     // Beta tester feedback: authenticated users can submit, only the owner reads.
+    // Future Play Billing entitlement cache. Only a trusted server using
+    // Firebase Admin SDK may write this collection after purchase verification.
+    // Never let Android client code grant itself subscriptions or privileges.
+    match /entitlements/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
     match /feedback/{feedbackId} {
       allow read: if isAdmin();
       allow create: if signedIn()
