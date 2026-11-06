@@ -185,6 +185,10 @@ fun GamerzApp() {
     var stories by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var storyReports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
+    var feedbackItems by remember { mutableStateOf(listOf<Map<String, Any>>()) }
+    var showFeedback by remember { mutableStateOf(false) }
+    var feedbackText by remember { mutableStateOf("") }
+    var feedbackType by remember { mutableStateOf("bug") }
     var reportTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var commentTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var viewedProfileUid by remember { mutableStateOf<String?>(null) }
@@ -231,6 +235,10 @@ fun GamerzApp() {
                 doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
             }
         storyReports = db.collection("storyReports").orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(100).get().await().documents.mapNotNull { doc ->
+                doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
+            }
+        feedbackItems = db.collection("feedback").orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .limit(100).get().await().documents.mapNotNull { doc ->
                 doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
             }
@@ -554,6 +562,15 @@ fun GamerzApp() {
                                 }
                             }
                             OutlinedButton(onClick = {
+                                feedbackType = "bug"
+                                feedbackText = ""
+                                showFeedback = true
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Feedback, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("أرسل ملاحظة أو بلّغ عن مشكلة")
+                            }
+                            OutlinedButton(onClick = {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/mustafaadrl93-ai/Gamerz/blob/main/docs/privacy-policy.md")))
                             }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PrivacyTip, null); Spacer(Modifier.width(8.dp)); Text("مسودة سياسة الخصوصية") }
                             OutlinedButton(onClick = { deletePassword = ""; showDeleteAccount = true }, modifier = Modifier.fillMaxWidth(),
@@ -672,6 +689,97 @@ fun GamerzApp() {
                                                 }
                                             }) { Text("رفض البلاغ") }
                                         }
+                                    }
+                                }
+                            }
+
+                            item {
+                                Spacer(Modifier.height(10.dp))
+                                Text("بلاغات القصص", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, color = Color(0xFFE9CCFF))
+                            }
+                            items(storyReports) { report ->
+                                Card(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                    Column(Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Text("قصة: " + report["storyId"]?.toString().orEmpty(),
+                                            style = MaterialTheme.typography.labelSmall)
+                                        Text("البلاغ: " + report["reason"]?.toString().orEmpty())
+                                        Text("الحالة: " + report["status"]?.toString().orEmpty())
+                                        Row {
+                                            TextButton(onClick = {
+                                                scope.launch {
+                                                    try {
+                                                        db.collection("storyReports")
+                                                            .document(report["_id"].toString())
+                                                            .update(mapOf(
+                                                                "status" to "reviewed",
+                                                                "reviewedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                                "reviewedBy" to currentUid
+                                                            )).await()
+                                                        refreshReports()
+                                                        message = "تمت مراجعة بلاغ القصة"
+                                                    } catch (e: Exception) {
+                                                        message = e.localizedMessage ?: "تعذر تحديث البلاغ"
+                                                    }
+                                                }
+                                            }) { Text("تمت المراجعة") }
+                                            TextButton(onClick = {
+                                                scope.launch {
+                                                    try {
+                                                        db.collection("stories")
+                                                            .document(report["storyId"].toString()).delete().await()
+                                                        db.collection("storyReports")
+                                                            .document(report["_id"].toString())
+                                                            .update(mapOf(
+                                                                "status" to "reviewed",
+                                                                "reviewedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                                "reviewedBy" to currentUid
+                                                            )).await()
+                                                        refreshStories()
+                                                        refreshReports()
+                                                        message = "حُذفت القصة المخالفة"
+                                                    } catch (e: Exception) {
+                                                        message = e.localizedMessage ?: "تعذر حذف القصة"
+                                                    }
+                                                }
+                                            }) { Text("حذف القصة", color = Color(0xFFFFA4B1)) }
+                                        }
+                                    }
+                                }
+                            }
+                            item {
+                                Spacer(Modifier.height(10.dp))
+                                Text("ملاحظات مختبري Gamerz",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, color = Color(0xFFE9CCFF))
+                            }
+                            items(feedbackItems) { feedback ->
+                                Card(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                    Column(Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("النوع: " + feedback["type"]?.toString().orEmpty(),
+                                            color = Color(0xFFCF9EF5))
+                                        Text(feedback["text"]?.toString().orEmpty())
+                                        Text("الحالة: " + feedback["status"]?.toString().orEmpty(),
+                                            style = MaterialTheme.typography.labelSmall)
+                                        TextButton(onClick = {
+                                            scope.launch {
+                                                try {
+                                                    db.collection("feedback")
+                                                        .document(feedback["_id"].toString())
+                                                        .update(mapOf(
+                                                            "status" to "reviewed",
+                                                            "reviewedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                            "reviewedBy" to currentUid
+                                                        )).await()
+                                                    refreshReports()
+                                                    message = "تمت مراجعة الملاحظة"
+                                                } catch (e: Exception) {
+                                                    message = e.localizedMessage ?: "تعذر تحديث الملاحظة"
+                                                }
+                                            }
+                                        }) { Text("تمت المراجعة") }
                                     }
                                 }
                             }
@@ -943,6 +1051,64 @@ fun GamerzApp() {
                 }
             }
         }
+    }
+    if (showFeedback) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) showFeedback = false },
+            title = { Text("ساعدنا نحسن Gamerz 🎮") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("أرسل المشكلة أو الاقتراح، وبتوصل مباشرة للمالك")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = feedbackType == "bug",
+                            onClick = { feedbackType = "bug" }, label = { Text("مشكلة") })
+                        FilterChip(selected = feedbackType == "idea",
+                            onClick = { feedbackType = "idea" }, label = { Text("اقتراح") })
+                        FilterChip(selected = feedbackType == "other",
+                            onClick = { feedbackType = "other" }, label = { Text("أخرى") })
+                    }
+                    OutlinedTextField(
+                        feedbackText,
+                        { feedbackText = it.take(1000) },
+                        label = { Text("ما الذي لاحظته؟") },
+                        minLines = 4, maxLines = 7,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("لا تضع كلمات مرور أو معلومات خاصة في الملاحظة.",
+                        color = Color(0xFFB8ABCA),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy && feedbackText.trim().length >= 10,
+                    onClick = {
+                        scope.launch {
+                            try {
+                                busy = true
+                                db.collection("feedback").add(mapOf(
+                                    "uid" to currentUid,
+                                    "type" to feedbackType,
+                                    "text" to feedbackText.trim(),
+                                    "status" to "open",
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )).await()
+                                showFeedback = false
+                                feedbackText = ""
+                                message = "شكرًا! وصلت ملاحظتك إلى لوحة الإدارة"
+                            } catch (e: Exception) {
+                                message = e.localizedMessage ?: "تعذر إرسال الملاحظة"
+                            } finally { busy = false }
+                        }
+                    }
+                ) { Text("إرسال") }
+            },
+            dismissButton = {
+                TextButton(enabled = !busy, onClick = { showFeedback = false }) {
+                    Text("إلغاء")
+                }
+            }
+        )
     }
     if (showDeleteAccount) {
         AlertDialog(
