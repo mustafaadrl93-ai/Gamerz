@@ -86,7 +86,7 @@ private suspend fun uploadImageToUploadcare(bytes: ByteArray): Pair<String, Stri
         check(status in 200..299) { "Image upload failed ($status): $response" }
         val fileId = JSONObject(response).getString("file")
         check(fileId.matches(Regex("[a-f0-9-]{20,40}"))) { "استجابة غير صالحة من خدمة الصور" }
-        Pair("https://ucarecdn.com/$fileId/", "uploadcare/$fileId")
+        Pair("https://26vsxjozef.ucarecd.net/$fileId/", "uploadcare/$fileId")
     } finally {
         connection.disconnect()
     }
@@ -711,9 +711,9 @@ fun GamerzApp() {
                             val urls = ownedPosts.mapNotNull { it.getString("imageUrl") } +
                                 ownedStories.mapNotNull { it.getString("imageUrl") } + listOf(avatarUrl)
                             val imagePaths = urls.mapNotNull { url ->
-                                if (!url.startsWith("https://ucarecdn.com/")) null
+                                if (!url.startsWith("https://26vsxjozef.ucarecd.net/")) null
                                 else {
-                                    val id = url.removePrefix("https://ucarecdn.com/").substringBefore("/")
+                                    val id = url.removePrefix("https://26vsxjozef.ucarecd.net/").substringBefore("/")
                                     if (id.matches(Regex("[a-f0-9-]{20,40}"))) "uploadcare/" + id else null
                                 }
                             }.distinct().take(500)
