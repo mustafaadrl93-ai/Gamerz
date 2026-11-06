@@ -122,12 +122,15 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if signedIn()
           && exists(/databases/$(database)/documents/posts/$(postId))
-          && request.resource.data.keys().hasOnly(['uid', 'username', 'text', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['uid', 'username', 'text', 'createdAt', 'replyTo'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.username == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 500
+          && (!('replyTo' in request.resource.data) ||
+              (request.resource.data.replyTo is string &&
+               exists(/databases/$(database)/documents/posts/$(postId)/comments/$(request.resource.data.replyTo))))
           && request.resource.data.createdAt == request.time;
         allow update: if false;
         allow delete: if signedIn() && (
