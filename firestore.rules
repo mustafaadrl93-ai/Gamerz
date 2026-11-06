@@ -42,6 +42,56 @@ service cloud.firestore {
           (request.resource.data.avatarStoragePath is string &&
            request.resource.data.avatarStoragePath.matches('^uploadcare/[a-f0-9-]{20,40}$')));
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+
+      // Private personal game library.
+      match /library/{gameId} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly([
+            'uid', 'name', 'platform', 'status', 'createdAt'
+          ])
+          && request.resource.data.uid == uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1
+          && request.resource.data.name.size() <= 80
+          && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC']
+          && request.resource.data.status in ['backlog', 'playing', 'completed']
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // Personal bookmarks, invisible to other accounts.
+    match /savedPosts/{ownerUid}/items/{postId} {
+      allow read: if signedIn() && request.auth.uid == ownerUid;
+      allow create: if signedIn()
+        && request.auth.uid == ownerUid
+        && exists(/databases/$(database)/documents/posts/$(postId))
+        && request.resource.data.keys().hasOnly(['uid', 'postId', 'createdAt'])
+        && request.resource.data.uid == ownerUid
+        && request.resource.data.postId == postId
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid == ownerUid;
+    }
+
+    // Account-level block list. Owner can remove follow relationships.
+    match /blocks/{ownerUid}/users/{blockedUid} {
+      allow read: if signedIn() && request.auth.uid == ownerUid;
+      allow create: if signedIn()
+        && request.auth.uid == ownerUid
+        && ownerUid != blockedUid
+        && exists(/databases/$(database)/documents/users/$(blockedUid))
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'blockedUid', 'createdAt'
+        ])
+        && request.resource.data.ownerUid == ownerUid
+        && request.resource.data.blockedUid == blockedUid
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid == ownerUid;
     }
 
     // A single document per follower/target pair prevents duplicate follows.
@@ -53,6 +103,12 @@ service cloud.firestore {
         && request.resource.data.followerUid == request.auth.uid
         && request.resource.data.targetUid is string
         && request.resource.data.targetUid != request.auth.uid
+        && !exists(
+          /databases/$(database)/documents/blocks/$(request.auth.uid)/users/$(request.resource.data.targetUid)
+        )
+        && !exists(
+          /databases/$(database)/documents/blocks/$(request.resource.data.targetUid)/users/$(request.auth.uid)
+        )
         && followId == request.auth.uid + '_' + request.resource.data.targetUid
         && exists(/databases/$(database)/documents/users/$(request.resource.data.targetUid))
         && request.resource.data.createdAt == request.time;
@@ -73,7 +129,7 @@ service cloud.firestore {
           'likes', 'commentCount'
         ])
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.platform == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.platform
+        && request.resource.data.platform in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.platforms
         && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC']
         && request.resource.data.gameName is string
         && request.resource.data.gameName.size() > 0
@@ -94,7 +150,14 @@ service cloud.firestore {
         && request.resource.data.pros.size() <= 500
         && request.resource.data.cons is string
         && request.resource.data.cons.size() <= 500
-        && request.resource.data.platinum == false
+        && request.resource.data.platinum is bool
+        && (
+          request.resource.data.platinum == false ||
+          (
+            request.resource.data.platform == 'PlayStation' &&
+            request.resource.data.completion == 100
+          )
+        )
         && request.resource.data.createdAt == request.time
         && request.resource.data.likes == 0
         && request.resource.data.commentCount == 0;
