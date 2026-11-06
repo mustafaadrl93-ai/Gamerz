@@ -583,6 +583,40 @@ fun GamerzApp() {
                                     post["title"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
                                     post["platform"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true)
                             }
+                            if (searchQuery.trim().length >= 2) {
+                                Text("اللاعبون", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, color = Color(0xFFE7CEFF))
+                                if (playerResults.isEmpty()) {
+                                    Text("لا يوجد لاعبون مطابقون في نتائج البحث",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFFB8A7CA))
+                                }
+                                playerResults.filter {
+                                    it["_uid"]?.toString() != currentUid
+                                }.forEach { player ->
+                                    val userId = player["_uid"]?.toString().orEmpty()
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .clickable { viewedProfileUid = userId },
+                                        color = Color(0xFF21182F),
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) {
+                                        Row(Modifier.fillMaxWidth().padding(11.dp),
+                                            verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.AccountCircle,
+                                                contentDescription = null,
+                                                tint = Color(0xFFBD8DEB),
+                                                modifier = Modifier.size(36.dp))
+                                            Spacer(Modifier.width(9.dp))
+                                            Text(player["username"]?.toString().orEmpty(),
+                                                modifier = Modifier.weight(1f),
+                                                color = Color.White, fontWeight = FontWeight.Bold)
+                                            GamerzFollowButton(currentUid, userId, db,
+                                                onChanged = { scope.launch { refreshFollowing() } })
+                                        }
+                                    }
+                                }
+                            }
                             Text(if (searchQuery.isBlank()) "أحدث الألعاب في المجتمع" else "نتائج البحث: " + results.size,
                                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             if (results.isEmpty()) {
@@ -811,7 +845,7 @@ fun GamerzApp() {
                                 if (message.isNotBlank()) Text(message,
                                     color = MaterialTheme.colorScheme.secondary)
                             }
-                            if (posts.isEmpty() && !busy && !refreshing) item {
+                            if (visiblePosts.isEmpty() && !busy && !refreshing) item {
                                 Card(Modifier.fillMaxWidth().padding(vertical = 12.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF21182E))) {
                                     Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFFC59AFF), modifier = Modifier.size(42.dp))
@@ -821,7 +855,7 @@ fun GamerzApp() {
                                     }
                                 }
                             }
-                            items(posts) { post ->
+                            items(visiblePosts) { post ->
                                 Card(Modifier.fillMaxWidth().padding(vertical = 7.dp),
                                     shape = RoundedCornerShape(24.dp),
                                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172A)),
@@ -834,7 +868,8 @@ fun GamerzApp() {
                                                 onOpenProfile = { if (it != currentUid) viewedProfileUid = it else page = "profile" })
                                             GamerzFollowButton(currentUid = currentUid,
                                                 targetUid = post["uid"]?.toString().orEmpty(),
-                                                db = db, modifier = Modifier.height(36.dp))
+                                                db = db, modifier = Modifier.height(36.dp),
+                                                onChanged = { scope.launch { refreshFollowing() } })
                                             Spacer(Modifier.width(6.dp))
                                             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
@@ -851,12 +886,28 @@ fun GamerzApp() {
                                             GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
-                                        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically) {
                                             GamerzLikeButton(postId = post["_id"].toString(), uid = currentUid, db = db)
                                             TextButton(onClick = { commentTarget = post }) {
                                                 Icon(Icons.Default.ChatBubbleOutline, contentDescription = null)
                                                 Spacer(Modifier.width(4.dp))
                                                 Text("التعليقات")
+                                            }
+                                            IconButton(onClick = {
+                                                val share = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_TEXT,
+                                                        (post["title"]?.toString().orEmpty()
+                                                            .ifBlank { post["gameName"]?.toString().orEmpty() }) +
+                                                        " 🎮 Gamerz\n" +
+                                                        post["gameName"]?.toString().orEmpty() + "\n" +
+                                                        displayImageUrl(post["imageUrl"]))
+                                                }
+                                                context.startActivity(Intent.createChooser(share, "مشاركة المنشور"))
+                                            }) {
+                                                Icon(Icons.Default.Share, contentDescription = "مشاركة المنشور",
+                                                    tint = Color(0xFFD9AFE9))
                                             }
                                             Spacer(Modifier.weight(1f))
                                             TextButton(onClick = { reportTarget = post; reportReason = "" }) { Text("إبلاغ") }
@@ -987,40 +1038,26 @@ fun GamerzApp() {
             db = db, posts = posts, onDismiss = { viewedProfileUid = null }
         )
     }
-    storyTarget?.let { story ->
-        AlertDialog(
-            onDismissRequest = { storyTarget = null },
-            title = { Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب") },
-            text = {
-                AsyncImage(
-                    model = displayImageUrl(story["imageUrl"]),
-                    contentDescription = "قصة بملء الشاشة",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxWidth().height(400.dp).clip(RoundedCornerShape(16.dp))
-                )
-            },
-            confirmButton = {
-                if (story["uid"] == currentUid || isOwner) {
-                    TextButton(enabled = !busy, onClick = {
-                        scope.launch {
-                            try {
-                                busy = true
-                                db.collection("stories").document(story["_id"].toString()).delete().await()
-                                storyTarget = null
-                                stories = stories.filterNot { it["_id"] == story["_id"] }
-                                message = "تم حذف القصة"
-                            } catch (e: Exception) {
-                                message = "تعذر حذف القصة: " + (e.localizedMessage ?: "راجع صلاحيات Firebase")
-                            } finally { busy = false }
-                        }
-                    }) {
-                        Icon(Icons.Default.Delete, contentDescription = null)
-                        Spacer(Modifier.width(4.dp))
-                        Text("حذف القصة")
+    storyTarget?.let { selected ->
+        GamerzStoryViewer(
+            stories = stories,
+            startStoryId = selected["_id"]?.toString().orEmpty(),
+            currentUid = currentUid,
+            isOwner = isOwner,
+            db = db,
+            onDismiss = { storyTarget = null },
+            onDeleteStory = { storyId ->
+                scope.launch {
+                    try {
+                        db.collection("stories").document(storyId).delete().await()
+                        stories = stories.filterNot { it["_id"]?.toString() == storyId }
+                        storyTarget = null
+                        message = "تم حذف القصة من Gamerz"
+                    } catch (e: Exception) {
+                        message = e.localizedMessage ?: "تعذر حذف القصة"
                     }
                 }
-            },
-            dismissButton = { TextButton(onClick = { storyTarget = null }) { Text("إغلاق") } }
+            }
         )
     }
     reportTarget?.let { target ->
