@@ -567,7 +567,7 @@ fun GamerzApp() {
                                                 scope.launch {
                                                     try {
                                                         db.collection("stories").document(story["_id"].toString()).delete().await()
-                                                        refreshStories(); message = "تم حذف القصة"
+                                                        stories = stories.filterNot { it["_id"] == story["_id"] }; message = "تم حذف القصة"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف القصة" }
                                                 }
                                             }) { Text("حذف") }
@@ -765,8 +765,8 @@ fun GamerzApp() {
                                 busy = true
                                 db.collection("stories").document(story["_id"].toString()).delete().await()
                                 storyTarget = null
+                                stories = stories.filterNot { it["_id"] == story["_id"] }
                                 message = "تم حذف القصة"
-                                try { refreshStories() } catch (_: Exception) { }
                             } catch (e: Exception) {
                                 message = "تعذر حذف القصة: " + (e.localizedMessage ?: "راجع صلاحيات Firebase")
                             } finally { busy = false }
