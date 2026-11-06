@@ -275,6 +275,15 @@ service cloud.firestore {
 
     // Players may report inappropriate stories; only the owner reviews reports.
     // Beta tester feedback: authenticated users can submit, only the owner reads.
+    // Future Play Billing entitlement cache. Only a trusted server using
+    // Firebase Admin SDK may write this collection after purchase verification.
+    // Never let Android client code grant itself subscriptions or privileges.
+    match /entitlements/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
     match /feedback/{feedbackId} {
       allow read: if isAdmin();
       allow create: if signedIn()
