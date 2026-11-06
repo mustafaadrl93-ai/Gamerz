@@ -1,5 +1,7 @@
 package com.gamerz.app
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -261,6 +263,11 @@ private data class OrbitQuest(
 private fun QuestCard(quest: OrbitQuest) {
     val complete = quest.value >= quest.goal
     val tone = if (complete) Color(0xFF67E7B9) else orbitViolet
+    val animatedFill by animateFloatAsState(
+        targetValue = (quest.value.toFloat() / quest.goal).coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 650),
+        label = "Orbit mission progress"
+    )
     Surface(
         color = Color(0xFF1E182B),
         shape = RoundedCornerShape(19.dp),
@@ -284,7 +291,7 @@ private fun QuestCard(quest: OrbitQuest) {
                 }
                 Text(quest.subtitle, color = orbitMuted, style = MaterialTheme.typography.labelSmall)
                 LinearProgressIndicator(
-                    progress = { (quest.value.toFloat() / quest.goal).coerceIn(0f, 1f) },
+                    progress = { animatedFill },
                     modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
                     color = tone, trackColor = Color(0xFF45374F),
                     drawStopIndicator = {}
@@ -368,6 +375,11 @@ fun GamerzOrbitRankHub(
     val progress = if (next == null) 1f
         else ((score - start).toFloat() / (next.required - start).coerceAtLeast(1))
             .coerceIn(0f, 1f)
+    val animatedRankProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 850),
+        label = "Orbit rank progress"
+    )
     val posts = snapshot.posts
     val checkedToday = snapshot.checkins.any {
         it["_id"]?.toString() == today
@@ -467,7 +479,7 @@ fun GamerzOrbitRankHub(
                             style = MaterialTheme.typography.titleLarge)
                     }
                     LinearProgressIndicator(
-                        progress = { progress },
+                        progress = { animatedRankProgress },
                         modifier = Modifier.fillMaxWidth().height(9.dp).clip(CircleShape),
                         color = rank.tone, trackColor = Color(0xFF4A3957),
                         drawStopIndicator = {}
