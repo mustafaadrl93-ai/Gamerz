@@ -389,6 +389,7 @@ fun GamerzPublicProfileSheet(
                 color = Color.White, fontWeight = FontWeight.ExtraBold)
             GamerzPlatformBadge(profile["platform"]?.toString().orEmpty())
             GamerzPlatinumCounter(targetUid, db)
+            GamerzOrbitRankPill(targetUid, db)
             GamerzFollowStats(targetUid, db, Modifier.fillMaxWidth(), refreshKey)
             GamerzFollowButton(currentUid, targetUid, db,
                 modifier = Modifier.fillMaxWidth().height(44.dp),
