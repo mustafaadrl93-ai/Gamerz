@@ -57,6 +57,21 @@ service cloud.firestore {
            request.resource.data.avatarStoragePath.matches('^uploadcare/[a-f0-9-]{20,40}$')));
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
 
+      // A unique server-verified UTC day per player prevents repeated check-ins.
+      // The day identifier is YEAR-DAY_OF_YEAR, e.g. 2026-311.
+      // Signed-in players can read attendance to display public activity ranks.
+      match /checkins/{dayId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && dayId == string(request.time.year()) + '-' +
+            string(request.time.dayOfYear())
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+          && request.resource.data.uid == uid
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+
       // Private personal game library.
       match /library/{gameId} {
         allow read: if signedIn() && request.auth.uid == uid;
