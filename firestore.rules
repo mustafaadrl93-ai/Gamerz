@@ -14,15 +14,159 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['username', 'platform', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['username', 'platform', 'platforms', 'createdAt'])
         && request.resource.data.username is string
         && request.resource.data.username.matches('^[A-Za-z0-9_]{2,20}$')
         && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC']
+        && request.resource.data.platforms is list
+        && request.resource.data.platforms.size() >= 1
+        && request.resource.data.platforms.size() <= 3
+        && request.resource.data.platform in request.resource.data.platforms
+        && request.resource.data.platforms.hasOnly(['PlayStation', 'Xbox', 'PC'])
         && request.resource.data.createdAt is int;
       allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username', 'avatarUrl', 'avatarStoragePath'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username', 'platform', 'platforms', 'avatarUrl', 'avatarStoragePath'])
         && request.resource.data.username is string
-        && request.resource.data.username.matches('^[A-Za-z0-9_]{2,20}$')
+        && request.resource.data.username.matches('^[A-Za-z0-9_]{2,20} in request.resource.data) || validImage(request.resource.data.avatarUrl))
+        && (!('avatarStoragePath' in request.resource.data) ||
+          (request.resource.data.avatarStoragePath is string &&
+           request.resource.data.avatarStoragePath.matches('^uploadcare/[a-f0-9-]{20,40}$')));
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    match /posts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'uid', 'platform', 'gameName', 'completion', 'rating', 'imageUrl',
+          'storagePath', 'pros', 'cons', 'platinum', 'createdAt',
+          'likes', 'commentCount'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.platform == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.platform
+        && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC']
+        && request.resource.data.gameName is string
+        && request.resource.data.gameName.size() > 0
+        && request.resource.data.gameName.size() <= 80
+        && request.resource.data.completion is int
+        && request.resource.data.completion >= 0
+        && request.resource.data.completion <= 100
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && validImage(request.resource.data.imageUrl)
+        && request.resource.data.storagePath is string
+        && request.resource.data.storagePath.matches('^uploadcare/[a-f0-9-]{20,40}$')
+        && request.resource.data.pros is string
+        && request.resource.data.pros.size() <= 500
+        && request.resource.data.cons is string
+        && request.resource.data.cons.size() <= 500
+        && request.resource.data.platinum == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.likes == 0
+        && request.resource.data.commentCount == 0;
+      allow update: if false;
+      allow delete: if signedIn()
+        && (isAdmin() || resource.data.uid == request.auth.uid);
+
+      match /likes/{likerUid} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.auth.uid == likerUid
+          && exists(/databases/$(database)/documents/posts/$(postId))
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if signedIn() && (
+          isAdmin() || request.auth.uid == likerUid ||
+          (exists(/databases/$(database)/documents/posts/$(postId)) &&
+           get(/databases/$(database)/documents/posts/$(postId)).data.uid == request.auth.uid)
+        );
+      }
+
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && exists(/databases/$(database)/documents/posts/$(postId))
+          && request.resource.data.keys().hasOnly(['uid', 'username', 'text', 'createdAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.username == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if signedIn() && (
+          isAdmin() || resource.data.uid == request.auth.uid ||
+          (exists(/databases/$(database)/documents/posts/$(postId)) &&
+           get(/databases/$(database)/documents/posts/$(postId)).data.uid == request.auth.uid)
+        );
+      }
+    }
+
+    match /stories/{storyId} {
+      // Old stories are filtered by expiresAt on the client; Firestore security rules
+      // cannot safely compare a client Timestamp.now() query bound to request.time.
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'imageUrl', 'caption', 'createdAt', 'expiresAt'])
+        && request.resource.data.uid == request.auth.uid
+        && validImage(request.resource.data.imageUrl)
+        && request.resource.data.caption is string
+        && request.resource.data.caption.size() <= 180
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(26, 'h');
+      allow update: if false;
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    // User requests for removal of third-party Uploadcare files.
+    // The account deletion flow removes Firestore content and Firebase Auth;
+    // media must subsequently be purged with trusted Uploadcare credentials.
+    match /deletionRequests/{deletionId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'imagePaths', 'createdAt', 'status'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.imagePaths is list
+        && request.resource.data.imagePaths.size() <= 500
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'postId', 'postOwnerUid', 'reporterUid', 'reason', 'status', 'createdAt'
+        ])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.postId is string
+        && exists(/databases/$(database)/documents/posts/$(request.resource.data.postId))
+        && request.resource.data.postOwnerUid == get(/databases/$(database)/documents/posts/$(request.resource.data.postId)).data.uid
+        && request.resource.data.postOwnerUid != request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 300
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy'])
+        && request.resource.data.status in ['reviewed', 'dismissed']
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time;
+      allow delete: if isAdmin();
+    }
+  }
+})
+        && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC']
+        && request.resource.data.platforms is list
+        && request.resource.data.platforms.size() >= 1
+        && request.resource.data.platforms.size() <= 3
+        && request.resource.data.platform in request.resource.data.platforms
+        && request.resource.data.platforms.hasOnly(['PlayStation', 'Xbox', 'PC'])
         && (!('avatarUrl' in request.resource.data) || validImage(request.resource.data.avatarUrl))
         && (!('avatarStoragePath' in request.resource.data) ||
           (request.resource.data.avatarStoragePath is string &&

@@ -148,6 +148,7 @@ fun GamerzApp() {
 
     var authMode by remember { mutableStateOf("login") }
     var platform by remember { mutableStateOf("") }
+    var selectedPlatforms by remember { mutableStateOf(setOf<String>()) }
     var avatarUrl by remember { mutableStateOf("") }
     var showDeleteAccount by remember { mutableStateOf(false) }
     var deletePassword by remember { mutableStateOf("") }
@@ -270,12 +271,12 @@ fun GamerzApp() {
                             shape = RoundedCornerShape(14.dp)) { Text("إنشاء حساب") }
                     }
                     if (authMode == "register") {
-                        Text("اختر منصة اللعب الأساسية", modifier = Modifier.fillMaxWidth(),
+                        Text("اختر منصات اللعب (يمكن اختيار أكثر من منصة)", modifier = Modifier.fillMaxWidth(),
                             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         listOf("PlayStation", "Xbox", "PC").forEach { choice ->
-                            OutlinedButton(onClick = { platform = choice }, modifier = Modifier.fillMaxWidth().height(51.dp),
-                                border = BorderStroke(if (platform == choice) 2.dp else 1.dp,
-                                    if (platform == choice) Color(0xFFC175FF) else Color(0xFF58426D)),
+                            OutlinedButton(onClick = { selectedPlatforms = if (choice in selectedPlatforms) selectedPlatforms - choice else selectedPlatforms + choice; platform = selectedPlatforms.firstOrNull().orEmpty() }, modifier = Modifier.fillMaxWidth().height(51.dp),
+                                border = BorderStroke(if (choice in selectedPlatforms) 2.dp else 1.dp,
+                                    if (choice in selectedPlatforms) Color(0xFFC175FF) else Color(0xFF58426D)),
                                 shape = RoundedCornerShape(15.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(containerColor = if (platform == choice) Color(0xFF302046) else Color(0xFF171022))) {
                                 Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFFC68DFF))
@@ -301,15 +302,15 @@ fun GamerzApp() {
                                 busy = true
                                 require(email.isNotBlank() && password.isNotBlank()) { "أدخل البريد وكلمة المرور" }
                                 if (authMode == "register") {
-                                    require(platform in listOf("PlayStation", "Xbox", "PC")) { "اختر منصة اللعب" }
+                                    require(selectedPlatforms.isNotEmpty()) { "اختر منصة لعب واحدة على الأقل" }
                                     require(username.trim().matches(Regex("^[A-Za-z0-9_]{2,20}$"))) {
                                         "اسم اللاعب يجب أن يكون من 2 إلى 20 حرفًا أو رقمًا أو _"
                                     }
                                     val user = auth.createUserWithEmailAndPassword(email.trim(), password).await().user
                                         ?: error("تعذّر إنشاء الحساب")
                                     db.collection("users").document(user.uid).set(mapOf(
-                                        "username" to username.trim(), "platform" to platform,
-                                        "createdAt" to System.currentTimeMillis()
+                                        "username" to username.trim(), "platform" to selectedPlatforms.first(),
+                                        "platforms" to selectedPlatforms.sorted(), "createdAt" to System.currentTimeMillis()
                                     )).await()
                                 } else {
                                     auth.signInWithEmailAndPassword(email.trim(), password).await()
@@ -332,7 +333,8 @@ fun GamerzApp() {
                         try {
                             val user = db.collection("users").document(currentUid).get().await()
                             username = user.getString("username").orEmpty()
-                            platform = user.getString("platform").orEmpty()
+                            selectedPlatforms = (user.get("platforms") as? List<*>)?.filterIsInstance<String>()?.toSet().orEmpty().ifEmpty { user.getString("platform")?.let { setOf(it) }.orEmpty() }
+                            platform = selectedPlatforms.firstOrNull().orEmpty()
                             avatarUrl = user.getString("avatarUrl").orEmpty()
                             profileLoaded = true
                         } catch (_: Exception) { }
@@ -392,6 +394,7 @@ fun GamerzApp() {
                                         val percent = completion.toIntOrNull() ?: error("أدخل نسبة صحيحة")
                                         require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة الإكمال مطلوبة" }
                                         require(rating in 1..5) { "يجب اختيار تقييم من 1 إلى 5 نجوم قبل النشر" }
+                                        require(platform.isNotBlank()) { "اختر منصات اللعب واحفظها من صفحة ملفي قبل النشر" }
                                         val bytes = readCompressedImage(context, imageUri!!)
                                         val (url, uploadPath) = uploadImageToUploadcare(bytes)
                                         db.collection("posts").add(mapOf(
@@ -442,12 +445,22 @@ fun GamerzApp() {
                             }
                             Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
-                            Text("منصة اللعب: $platform")
+                            Text("منصات اللعب (اختر واحدة أو أكثر)")
+                            listOf("PlayStation", "Xbox", "PC").forEach { choice ->
+                                OutlinedButton(onClick = { selectedPlatforms = if (choice in selectedPlatforms) selectedPlatforms - choice else selectedPlatforms + choice; platform = selectedPlatforms.firstOrNull().orEmpty() }, modifier = Modifier.fillMaxWidth(), border = BorderStroke(if (choice in selectedPlatforms) 2.dp else 1.dp, Color(0xFFC175FF))) {
+                                    Text((if (choice in selectedPlatforms) "✓ " else "") + choice)
+                                }
+                            }
                             Button(onClick = {
                                 scope.launch {
                                     try {
-                                        db.collection("users").document(currentUid)
-                                            .update("username", username.trim()).await()
+                                        require(selectedPlatforms.isNotEmpty()) { "اختر منصة واحدة على الأقل" }
+                                        require(username.trim().matches(Regex("^[A-Za-z0-9_]{2,20}$"))) { "اسم اللاعب غير صالح" }
+                                        val profileRef = db.collection("users").document(currentUid)
+                                        val profileData = mapOf("username" to username.trim(), "platform" to selectedPlatforms.first(), "platforms" to selectedPlatforms.sorted())
+                                        if (profileRef.get().await().exists()) profileRef.update(profileData).await()
+                                        else profileRef.set(profileData + ("createdAt" to System.currentTimeMillis())).await()
+                                        platform = selectedPlatforms.first()
                                         message = "تم حفظ اسم اللاعب"
                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر الحفظ" }
                                 }
@@ -476,7 +489,7 @@ fun GamerzApp() {
                                 Spacer(Modifier.width(8.dp))
                                 Text("حذف حسابي")
                             }
-                            TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
+                            TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; selectedPlatforms = emptySet(); avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
                         "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db)
                         "search" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
