@@ -93,15 +93,38 @@ private suspend fun uploadImageToUploadcare(bytes: ByteArray): Pair<String, Stri
 }
 
 private fun readCompressedImage(context: android.content.Context, uri: Uri): ByteArray {
-    val input = context.contentResolver.openInputStream(uri) ?: error("Cannot open image")
-    val bitmap = input.use { android.graphics.BitmapFactory.decodeStream(it) } ?: error("Invalid image")
-    require(bitmap.width.toLong() * bitmap.height.toLong() <= 30_000_000L) { "الصورة كبيرة جدًا، اختر صورة أصغر" }
+    val resolver = context.contentResolver
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    val boundsInput = resolver.openInputStream(uri) ?: error("تعذر قراءة الصورة")
+    boundsInput.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+    require(bounds.outWidth > 0 && bounds.outHeight > 0) { "ملف الصورة غير صالح" }
+
+    // Decode a reduced bitmap before allocating memory: modern camera photos
+    // may exceed 30 megapixels, which previously caused upload crashes.
+    var sample = 1
+    while (maxOf(bounds.outWidth / sample, bounds.outHeight / sample) > 2000) sample *= 2
+    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+    val bitmap = resolver.openInputStream(uri)?.use {
+        android.graphics.BitmapFactory.decodeStream(it, null, options)
+    } ?: error("تعذر فتح الصورة")
+    val scale = minOf(1f, 1600f / bitmap.width, 1600f / bitmap.height)
+    val resized = if (scale < 1f) {
+        android.graphics.Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1),
+            true
+        )
+    } else bitmap
     return try {
         ByteArrayOutputStream().use { output ->
-            check(bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, output)) { "فشل ضغط الصورة" }
-            output.toByteArray()
+            check(resized.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, output)) { "فشل ضغط الصورة" }
+            val bytes = output.toByteArray()
+            require(bytes.size <= 8 * 1024 * 1024) { "الصورة كبيرة جدًا بعد الضغط" }
+            bytes
         }
     } finally {
+        if (resized !== bitmap) resized.recycle()
         bitmap.recycle()
     }
 }
@@ -148,6 +171,7 @@ fun GamerzApp() {
     var stories by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reportTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var commentTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var reportReason by remember { mutableStateOf("") }
     var profileLoaded by remember { mutableStateOf(false) }
 
@@ -408,6 +432,11 @@ fun GamerzApp() {
                                 Spacer(Modifier.width(8.dp))
                                 Text("تغيير الصورة الرمزية")
                             }
+                            if (isOwner) OutlinedButton(onClick = { page = "admin"; refreshAll() }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Security, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("لوحة إدارة Gamerz")
+                            }
                             Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
                             Text("منصة اللعب: $platform")
@@ -446,6 +475,7 @@ fun GamerzApp() {
                             }
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
+                        "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db)
                         "search" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             GamerzPageHeading("استكشاف الألعاب", "ابحث في آخر المنشورات وأبرز إنجازات اللاعبين")
@@ -581,26 +611,34 @@ fun GamerzApp() {
                                 Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF191622))) {
                                     Column(Modifier.fillMaxWidth()) {
                                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.AccountCircle, contentDescription = null, tint = Color(0xFFB78AFF), modifier = Modifier.size(36.dp))
-                                            Spacer(Modifier.width(10.dp))
-                                            Column(Modifier.weight(1f)) {
-                                                Text(post["gameName"]?.toString() ?: "Game", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                                Text(post["platform"]?.toString()?.takeIf { it.isNotBlank() } ?: "لاعب Gamerz", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9ADC9))
-                                            }
+                                            GamerzPostAuthor(uid = post["uid"]?.toString().orEmpty(), fallbackPlatform = post["platform"]?.toString().orEmpty(),
+                                                db = db, modifier = Modifier.weight(1f))
                                             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
                                         AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(280.dp).background(Color(0xFF0E0B18)))
                                         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                            Text(post["gameName"]?.toString().orEmpty(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                                             GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
                                             GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
-                                        Row(Modifier.padding(horizontal = 8.dp)) {
+                                        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            GamerzLikeButton(postId = post["_id"].toString(), uid = currentUid, db = db)
+                                            TextButton(onClick = { commentTarget = post }) {
+                                                Icon(Icons.Default.ChatBubbleOutline, contentDescription = null)
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("تعليق")
+                                            }
+                                            Spacer(Modifier.weight(1f))
                                             TextButton(onClick = { reportTarget = post; reportReason = "" }) { Text("إبلاغ") }
                                             if (post["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        db.collection("posts").document(post["_id"].toString()).delete().await()
+                                                        val postRef = db.collection("posts").document(post["_id"].toString())
+                                                        for (collectionName in listOf("likes", "comments")) {
+                                                            for (item in postRef.collection(collectionName).get().await().documents) item.reference.delete().await()
+                                                        }
+                                                        postRef.delete().await()
                                                         refreshFeed(); message = "تم حذف المنشور"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف المنشور" }
                                                 }
@@ -618,8 +656,8 @@ fun GamerzApp() {
                         NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
                         NavigationBarItem(selected = page == "search", onClick = { page = "search" }, icon = { Icon(Icons.Default.Search, null) }, label = { Text("استكشاف") })
                         NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null, tint = Color(0xFFC77CFF)) }, label = { Text("نشر") })
+                        NavigationBarItem(selected = page == "activity", onClick = { page = "activity" }, icon = { Icon(Icons.Default.Notifications, null) }, label = { Text("النشاط") })
                         NavigationBarItem(selected = page == "profile", onClick = { page = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("ملفي") })
-                        if (isOwner) NavigationBarItem(selected = page == "admin", onClick = { page = "admin"; refreshAll() }, icon = { Icon(Icons.Default.Security, null) }, label = { Text("الإدارة") })
                     }
 
                 }
@@ -669,7 +707,12 @@ fun GamerzApp() {
                                 "status" to "pending",
                                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                             )).await()
-                            for (doc in ownedPosts) doc.reference.delete().await()
+                            for (doc in ownedPosts) {
+                                for (collectionName in listOf("likes", "comments")) {
+                                    for (item in doc.reference.collection(collectionName).get().await().documents) item.reference.delete().await()
+                                }
+                                doc.reference.delete().await()
+                            }
                             for (doc in ownedStories) doc.reference.delete().await()
                             db.collection("users").document(uid).delete().await()
                             user.delete().await()
@@ -696,6 +739,12 @@ fun GamerzApp() {
         )
     }
 
+    commentTarget?.let { target ->
+        GamerzCommentsDialog(
+            postId = target["_id"].toString(), uid = currentUid, isOwner = isOwner,
+            db = db, onDismiss = { commentTarget = null }
+        )
+    }
     storyTarget?.let { story ->
         AlertDialog(
             onDismissRequest = { storyTarget = null },
