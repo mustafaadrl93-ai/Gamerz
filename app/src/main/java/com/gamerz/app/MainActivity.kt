@@ -42,6 +42,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.ByteArrayOutputStream
@@ -170,7 +171,12 @@ fun GamerzApp() {
     var storyTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var review by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var storyUri by remember { mutableStateOf<Uri?>(null) }
+    var storyUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var storyCaption by remember { mutableStateOf("") }
+    var storyUploadCount by remember { mutableIntStateOf(0) }
+    var feedMode by remember { mutableStateOf("forYou") }
+    var followedUsers by remember { mutableStateOf(setOf<String>()) }
+    var playerResults by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var loggedIn by remember { mutableStateOf(auth.currentUser != null) }
     var busy by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
@@ -179,6 +185,11 @@ fun GamerzApp() {
     var posts by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var stories by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
+    var storyReports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
+    var feedbackItems by remember { mutableStateOf(listOf<Map<String, Any>>()) }
+    var showFeedback by remember { mutableStateOf(false) }
+    var feedbackText by remember { mutableStateOf("") }
+    var feedbackType by remember { mutableStateOf("bug") }
     var reportTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var commentTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var viewedProfileUid by remember { mutableStateOf<String?>(null) }
@@ -186,7 +197,9 @@ fun GamerzApp() {
     var profileLoaded by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { imageUri = it }
-    val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { storyUri = it }
+    val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        storyUris = uris.take(10)
+    }
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null && currentUid.isNotBlank() && !busy) scope.launch {
             try {
@@ -222,6 +235,24 @@ fun GamerzApp() {
             .limit(100).get().await().documents.mapNotNull { doc ->
                 doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
             }
+        storyReports = db.collection("storyReports").orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(100).get().await().documents.mapNotNull { doc ->
+                doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
+            }
+        feedbackItems = db.collection("feedback").orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(100).get().await().documents.mapNotNull { doc ->
+                doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
+            }
+    }
+    suspend fun refreshFollowing() {
+        if (currentUid.isBlank()) return
+        try {
+            followedUsers = db.collection("follows")
+                .whereEqualTo("followerUid", currentUid)
+                .limit(300).get().await().documents.mapNotNull {
+                    it.getString("targetUid")
+                }.toSet()
+        } catch (_: Exception) { /* Following feed remains available offline. */ }
     }
     fun refreshAll() {
         scope.launch {
@@ -229,6 +260,7 @@ fun GamerzApp() {
                 busy = true
                 refreshFeed()
                 refreshStories()
+                refreshFollowing()
                 if (isOwner) refreshReports()
             } catch (e: Exception) {
                 message = e.localizedMessage ?: "تعذر تحديث المحتوى"
@@ -243,10 +275,28 @@ fun GamerzApp() {
             try {
                 refreshFeed()
                 refreshStories()
+                refreshFollowing()
             } catch (e: Exception) {
                 message = e.localizedMessage ?: "تعذر تحديث الصفحة"
             } finally { refreshing = false }
         }
+    }
+
+    val visiblePosts = if (feedMode == "following") {
+        posts.filter { it["uid"]?.toString().orEmpty() in followedUsers }
+    } else posts
+    LaunchedEffect(page, searchQuery) {
+        if (page == "search" && searchQuery.trim().length >= 2) {
+            delay(350)
+            try {
+                val query = searchQuery.trim()
+                playerResults = db.collection("users").orderBy("username")
+                    .startAt(query).endAt(query + "\uf8ff").limit(15).get().await()
+                    .documents.mapNotNull { d ->
+                        d.data?.toMutableMap()?.apply { put("_uid", d.id) }
+                    }
+            } catch (_: Exception) { playerResults = emptyList() }
+        } else playerResults = emptyList()
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -513,6 +563,15 @@ fun GamerzApp() {
                                 }
                             }
                             OutlinedButton(onClick = {
+                                feedbackType = "bug"
+                                feedbackText = ""
+                                showFeedback = true
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Feedback, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("أرسل ملاحظة أو بلّغ عن مشكلة")
+                            }
+                            OutlinedButton(onClick = {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/mustafaadrl93-ai/Gamerz/blob/main/docs/privacy-policy.md")))
                             }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PrivacyTip, null); Spacer(Modifier.width(8.dp)); Text("مسودة سياسة الخصوصية") }
                             OutlinedButton(onClick = { deletePassword = ""; showDeleteAccount = true }, modifier = Modifier.fillMaxWidth(),
@@ -541,6 +600,40 @@ fun GamerzApp() {
                                     post["gameName"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
                                     post["title"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
                                     post["platform"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true)
+                            }
+                            if (searchQuery.trim().length >= 2) {
+                                Text("اللاعبون", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, color = Color(0xFFE7CEFF))
+                                if (playerResults.isEmpty()) {
+                                    Text("لا يوجد لاعبون مطابقون في نتائج البحث",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFFB8A7CA))
+                                }
+                                playerResults.filter {
+                                    it["_uid"]?.toString() != currentUid
+                                }.forEach { player ->
+                                    val userId = player["_uid"]?.toString().orEmpty()
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .clickable { viewedProfileUid = userId },
+                                        color = Color(0xFF21182F),
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) {
+                                        Row(Modifier.fillMaxWidth().padding(11.dp),
+                                            verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.AccountCircle,
+                                                contentDescription = null,
+                                                tint = Color(0xFFBD8DEB),
+                                                modifier = Modifier.size(36.dp))
+                                            Spacer(Modifier.width(9.dp))
+                                            Text(player["username"]?.toString().orEmpty(),
+                                                modifier = Modifier.weight(1f),
+                                                color = Color.White, fontWeight = FontWeight.Bold)
+                                            GamerzFollowButton(currentUid, userId, db,
+                                                onChanged = { scope.launch { refreshFollowing() } })
+                                        }
+                                    }
+                                }
                             }
                             Text(if (searchQuery.isBlank()) "أحدث الألعاب في المجتمع" else "نتائج البحث: " + results.size,
                                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -600,58 +693,268 @@ fun GamerzApp() {
                                     }
                                 }
                             }
+
+                            item {
+                                Spacer(Modifier.height(10.dp))
+                                Text("بلاغات القصص", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, color = Color(0xFFE9CCFF))
+                            }
+                            items(storyReports) { report ->
+                                Card(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                    Column(Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Text("قصة: " + report["storyId"]?.toString().orEmpty(),
+                                            style = MaterialTheme.typography.labelSmall)
+                                        Text("البلاغ: " + report["reason"]?.toString().orEmpty())
+                                        Text("الحالة: " + report["status"]?.toString().orEmpty())
+                                        Row {
+                                            TextButton(onClick = {
+                                                scope.launch {
+                                                    try {
+                                                        db.collection("storyReports")
+                                                            .document(report["_id"].toString())
+                                                            .update(mapOf(
+                                                                "status" to "reviewed",
+                                                                "reviewedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                                "reviewedBy" to currentUid
+                                                            )).await()
+                                                        refreshReports()
+                                                        message = "تمت مراجعة بلاغ القصة"
+                                                    } catch (e: Exception) {
+                                                        message = e.localizedMessage ?: "تعذر تحديث البلاغ"
+                                                    }
+                                                }
+                                            }) { Text("تمت المراجعة") }
+                                            TextButton(onClick = {
+                                                scope.launch {
+                                                    try {
+                                                        db.collection("stories")
+                                                            .document(report["storyId"].toString()).delete().await()
+                                                        db.collection("storyReports")
+                                                            .document(report["_id"].toString())
+                                                            .update(mapOf(
+                                                                "status" to "reviewed",
+                                                                "reviewedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                                "reviewedBy" to currentUid
+                                                            )).await()
+                                                        refreshStories()
+                                                        refreshReports()
+                                                        message = "حُذفت القصة المخالفة"
+                                                    } catch (e: Exception) {
+                                                        message = e.localizedMessage ?: "تعذر حذف القصة"
+                                                    }
+                                                }
+                                            }) { Text("حذف القصة", color = Color(0xFFFFA4B1)) }
+                                        }
+                                    }
+                                }
+                            }
+                            item {
+                                Spacer(Modifier.height(10.dp))
+                                Text("ملاحظات مختبري Gamerz",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold, color = Color(0xFFE9CCFF))
+                            }
+                            items(feedbackItems) { feedback ->
+                                Card(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                    Column(Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("النوع: " + feedback["type"]?.toString().orEmpty(),
+                                            color = Color(0xFFCF9EF5))
+                                        Text(feedback["text"]?.toString().orEmpty())
+                                        Text("الحالة: " + feedback["status"]?.toString().orEmpty(),
+                                            style = MaterialTheme.typography.labelSmall)
+                                        TextButton(onClick = {
+                                            scope.launch {
+                                                try {
+                                                    db.collection("feedback")
+                                                        .document(feedback["_id"].toString())
+                                                        .update(mapOf(
+                                                            "status" to "reviewed",
+                                                            "reviewedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                            "reviewedBy" to currentUid
+                                                        )).await()
+                                                    refreshReports()
+                                                    message = "تمت مراجعة الملاحظة"
+                                                } catch (e: Exception) {
+                                                    message = e.localizedMessage ?: "تعذر تحديث الملاحظة"
+                                                }
+                                            }
+                                        }) { Text("تمت المراجعة") }
+                                    }
+                                }
+                            }
                             item { Text("القصص تختفي بعد 24 ساعة، لكن حذف سجلاتها المنتهية تلقائيًا غير متاح على الخطة المجانية.", style = MaterialTheme.typography.bodySmall) }
                         } else Text("غير مصرح")
                         else -> PullToRefreshBox(isRefreshing = refreshing, onRefresh = { pullToRefresh() }, modifier = Modifier.fillMaxSize()) {
                             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             item {
-                                Text("لحظات اللاعبين", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFFEAD9FF))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Column {
+                                        Text("لحظات اللاعبين", style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.ExtraBold, color = Color(0xFFF0DDFF))
+                                        Text("قصص يومية • صور تختفي بعد 24 ساعة",
+                                            color = Color(0xFFBCA7CE),
+                                            style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF322247)) {
+                                        Text("LIVE", color = Color(0xFFDFA7FF),
+                                            fontWeight = FontWeight.Black,
+                                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                                            style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                                val featuredStories = stories.groupBy {
+                                    it["uid"]?.toString().orEmpty()
+                                }.values.mapNotNull { accountStories ->
+                                    accountStories.maxByOrNull {
+                                        (it["createdAt"] as? Timestamp)?.seconds ?: 0L
+                                    }
+                                }
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                    modifier = Modifier.fillMaxWidth()) {
                                     item {
-                                        Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            OutlinedButton(onClick = { storyPicker.launch("image/*") }, modifier = Modifier.size(76.dp), contentPadding = PaddingValues(0.dp), shape = CircleShape) { Icon(Icons.Default.Add, contentDescription = "إضافة قصة") }
-                                            Text("قصتك", style = MaterialTheme.typography.labelSmall)
+                                        Column(Modifier.width(87.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = Color(0xFF352149),
+                                                modifier = Modifier.size(78.dp)
+                                                    .border(2.dp, Color(0xFFB77AFF), CircleShape)
+                                                    .clickable { if (!busy) storyPicker.launch("image/*") }
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(Icons.Default.Add, contentDescription = "أضف صور قصتك",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(30.dp))
+                                                }
+                                            }
+                                            Text("قصتك +", color = Color(0xFFE9CFFF),
+                                                style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
-                                    items(stories) { story ->
-                                        Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            AsyncImage(model = displayImageUrl(story["imageUrl"]), contentDescription = "عرض القصة", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape).clickable { storyTarget = story })
-                                            Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب", style = MaterialTheme.typography.labelSmall)
-                                            if (story["uid"] == currentUid || isOwner) TextButton(onClick = {
-                                                scope.launch {
-                                                    try {
-                                                        db.collection("stories").document(story["_id"].toString()).delete().await()
-                                                        stories = stories.filterNot { it["_id"] == story["_id"] }; message = "تم حذف القصة"
-                                                    } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف القصة" }
+                                    items(featuredStories) { story ->
+                                        val number = stories.count { it["uid"] == story["uid"] }
+                                        GamerzStoryBubble(
+                                            story = story, storyCount = number,
+                                            db = db, currentUid = currentUid,
+                                            onClick = { storyTarget = story }
+                                        )
+                                    }
+                                }
+                                if (storyUris.isNotEmpty()) {
+                                    Card(
+                                        shape = RoundedCornerShape(22.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF261B35)),
+                                        border = BorderStroke(1.dp, Color(0xFF553476))
+                                    ) {
+                                        Column(Modifier.fillMaxWidth().padding(14.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Text("قصتك الجديدة", fontWeight = FontWeight.ExtraBold,
+                                                style = MaterialTheme.typography.titleMedium)
+                                            Text("اخترت " + storyUris.size + " صور • حد أقصى 10 صور في كل دفعة",
+                                                color = Color(0xFFC9B2DC),
+                                                style = MaterialTheme.typography.bodySmall)
+                                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                items(storyUris) { uri ->
+                                                    Image(painter = rememberAsyncImagePainter(uri),
+                                                        contentDescription = "معاينة صورة القصة",
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.size(90.dp)
+                                                            .clip(RoundedCornerShape(12.dp)))
                                                 }
-                                            }) { Text("حذف") }
+                                            }
+                                            OutlinedTextField(
+                                                value = storyCaption,
+                                                onValueChange = { storyCaption = it.take(180) },
+                                                label = { Text("وصف بسيط للقصص (اختياري)") },
+                                                maxLines = 2, modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(14.dp)
+                                            )
+                                            if (busy) Text("جارٍ رفع الصورة " + (storyUploadCount + 1),
+                                                color = Color(0xFFE7C7FF))
+                                            Button(
+                                                enabled = !busy && storyUris.isNotEmpty(),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(14.dp),
+                                                onClick = {
+                                                    scope.launch {
+                                                        val queue = storyUris
+                                                        var published = 0
+                                                        try {
+                                                            busy = true
+                                                            storyUploadCount = 0
+                                                            for (uri in queue) {
+                                                                val bytes = readCompressedImage(context, uri)
+                                                                val (url, _) = uploadImageToUploadcare(bytes)
+                                                                val now = Timestamp.now()
+                                                                db.collection("stories").add(mapOf(
+                                                                    "uid" to currentUid,
+                                                                    "imageUrl" to url,
+                                                                    "caption" to storyCaption.trim(),
+                                                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                                    "expiresAt" to Timestamp(now.seconds + 24 * 60 * 60, now.nanoseconds)
+                                                                )).await()
+                                                                published++
+                                                                storyUploadCount = published
+                                                                storyUris = queue.drop(published)
+                                                            }
+                                                            storyCaption = ""
+                                                            message = "تم نشر " + published + " قصص لمدة 24 ساعة"
+                                                            refreshStories()
+                                                        } catch (e: Exception) {
+                                                            message = "نُشرت " + published +
+                                                                " صور. تعذر إكمال الباقي: " +
+                                                                (e.localizedMessage ?: "تحقق من اتصالك")
+                                                            try { refreshStories() } catch (_: Exception) { }
+                                                        } finally {
+                                                            busy = false
+                                                            storyUploadCount = 0
+                                                        }
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.AutoStories, contentDescription = null)
+                                                Spacer(Modifier.width(7.dp))
+                                                Text("نشر " + storyUris.size + " صور في قصتي")
+                                            }
+                                            TextButton(enabled = !busy, onClick = {
+                                                storyUris = emptyList()
+                                                storyCaption = ""
+                                            }) { Text("إلغاء الاختيار") }
                                         }
                                     }
                                 }
-                                storyUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = "معاينة القصة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(16.dp))) }
-                                if (storyUri != null) Button(enabled = !busy, onClick = {
-                                    scope.launch {
-                                        try {
-                                            busy = true
-                                            val bytes = readCompressedImage(context, storyUri!!)
-                                            val (url, _) = uploadImageToUploadcare(bytes)
-                                            val now = Timestamp.now()
-                                            db.collection("stories").add(mapOf(
-                                                "uid" to currentUid, "imageUrl" to url, "caption" to "",
-                                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                                                "expiresAt" to Timestamp(now.seconds + 24 * 60 * 60, now.nanoseconds)
-                                            )).await()
-                                            storyUri = null; message = "تم نشر القصة لمدة 24 ساعة"
-                                            try { refreshStories() } catch (_: Exception) { message = "نُشرت القصة، لكن فشل تحديث القائمة. راجع قواعد Firebase." }
-                                        } catch (e: Exception) { message = e.localizedMessage ?: "فشل نشر القصة" }
-                                        finally { busy = false }
-                                    }
-                                }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.AutoStories, contentDescription = null); Spacer(Modifier.width(8.dp)); Text(if (busy) "جارٍ نشر القصة..." else "نشر القصة") }
-                                if (storyUri != null) TextButton(onClick = { storyUri = null }) { Text("إلغاء") }
-                                if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.secondary)
-                                Spacer(Modifier.height(10.dp))
+                                Row(Modifier.fillMaxWidth().padding(top = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(
+                                        selected = feedMode == "forYou",
+                                        onClick = { feedMode = "forYou" },
+                                        label = { Text("اكتشف") },
+                                        leadingIcon = { Icon(Icons.Default.Explore, null) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    FilterChip(
+                                        selected = feedMode == "following",
+                                        onClick = { feedMode = "following"; scope.launch { refreshFollowing() } },
+                                        label = { Text("أتابعهم") },
+                                        leadingIcon = { Icon(Icons.Default.Groups, null) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                if (feedMode == "following" && followedUsers.isEmpty()) {
+                                    Text("تابع لاعبين لتشاهد منشوراتهم هنا",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFFCCB3D9))
+                                }
+                                if (message.isNotBlank()) Text(message,
+                                    color = MaterialTheme.colorScheme.secondary)
                             }
-                            if (posts.isEmpty() && !busy && !refreshing) item {
+                            if (visiblePosts.isEmpty() && !busy && !refreshing) item {
                                 Card(Modifier.fillMaxWidth().padding(vertical = 12.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF21182E))) {
                                     Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFFC59AFF), modifier = Modifier.size(42.dp))
@@ -661,7 +964,7 @@ fun GamerzApp() {
                                     }
                                 }
                             }
-                            items(posts) { post ->
+                            items(visiblePosts) { post ->
                                 Card(Modifier.fillMaxWidth().padding(vertical = 7.dp),
                                     shape = RoundedCornerShape(24.dp),
                                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172A)),
@@ -674,7 +977,8 @@ fun GamerzApp() {
                                                 onOpenProfile = { if (it != currentUid) viewedProfileUid = it else page = "profile" })
                                             GamerzFollowButton(currentUid = currentUid,
                                                 targetUid = post["uid"]?.toString().orEmpty(),
-                                                db = db, modifier = Modifier.height(36.dp))
+                                                db = db, modifier = Modifier.height(36.dp),
+                                                onChanged = { scope.launch { refreshFollowing() } })
                                             Spacer(Modifier.width(6.dp))
                                             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
@@ -691,12 +995,28 @@ fun GamerzApp() {
                                             GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
-                                        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically) {
                                             GamerzLikeButton(postId = post["_id"].toString(), uid = currentUid, db = db)
                                             TextButton(onClick = { commentTarget = post }) {
                                                 Icon(Icons.Default.ChatBubbleOutline, contentDescription = null)
                                                 Spacer(Modifier.width(4.dp))
                                                 Text("التعليقات")
+                                            }
+                                            IconButton(onClick = {
+                                                val share = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_TEXT,
+                                                        (post["title"]?.toString().orEmpty()
+                                                            .ifBlank { post["gameName"]?.toString().orEmpty() }) +
+                                                        " 🎮 Gamerz\n" +
+                                                        post["gameName"]?.toString().orEmpty() + "\n" +
+                                                        displayImageUrl(post["imageUrl"]))
+                                                }
+                                                context.startActivity(Intent.createChooser(share, "مشاركة المنشور"))
+                                            }) {
+                                                Icon(Icons.Default.Share, contentDescription = "مشاركة المنشور",
+                                                    tint = Color(0xFFD9AFE9))
                                             }
                                             Spacer(Modifier.weight(1f))
                                             TextButton(onClick = { reportTarget = post; reportReason = "" }) { Text("إبلاغ") }
@@ -732,6 +1052,64 @@ fun GamerzApp() {
                 }
             }
         }
+    }
+    if (showFeedback) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) showFeedback = false },
+            title = { Text("ساعدنا نحسن Gamerz 🎮") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("أرسل المشكلة أو الاقتراح، وبتوصل مباشرة للمالك")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = feedbackType == "bug",
+                            onClick = { feedbackType = "bug" }, label = { Text("مشكلة") })
+                        FilterChip(selected = feedbackType == "idea",
+                            onClick = { feedbackType = "idea" }, label = { Text("اقتراح") })
+                        FilterChip(selected = feedbackType == "other",
+                            onClick = { feedbackType = "other" }, label = { Text("أخرى") })
+                    }
+                    OutlinedTextField(
+                        feedbackText,
+                        { feedbackText = it.take(1000) },
+                        label = { Text("ما الذي لاحظته؟") },
+                        minLines = 4, maxLines = 7,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("لا تضع كلمات مرور أو معلومات خاصة في الملاحظة.",
+                        color = Color(0xFFB8ABCA),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy && feedbackText.trim().length >= 10,
+                    onClick = {
+                        scope.launch {
+                            try {
+                                busy = true
+                                db.collection("feedback").add(mapOf(
+                                    "uid" to currentUid,
+                                    "type" to feedbackType,
+                                    "text" to feedbackText.trim(),
+                                    "status" to "open",
+                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                )).await()
+                                showFeedback = false
+                                feedbackText = ""
+                                message = "شكرًا! وصلت ملاحظتك إلى لوحة الإدارة"
+                            } catch (e: Exception) {
+                                message = e.localizedMessage ?: "تعذر إرسال الملاحظة"
+                            } finally { busy = false }
+                        }
+                    }
+                ) { Text("إرسال") }
+            },
+            dismissButton = {
+                TextButton(enabled = !busy, onClick = { showFeedback = false }) {
+                    Text("إلغاء")
+                }
+            }
+        )
     }
     if (showDeleteAccount) {
         AlertDialog(
@@ -827,40 +1205,26 @@ fun GamerzApp() {
             db = db, posts = posts, onDismiss = { viewedProfileUid = null }
         )
     }
-    storyTarget?.let { story ->
-        AlertDialog(
-            onDismissRequest = { storyTarget = null },
-            title = { Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب") },
-            text = {
-                AsyncImage(
-                    model = displayImageUrl(story["imageUrl"]),
-                    contentDescription = "قصة بملء الشاشة",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxWidth().height(400.dp).clip(RoundedCornerShape(16.dp))
-                )
-            },
-            confirmButton = {
-                if (story["uid"] == currentUid || isOwner) {
-                    TextButton(enabled = !busy, onClick = {
-                        scope.launch {
-                            try {
-                                busy = true
-                                db.collection("stories").document(story["_id"].toString()).delete().await()
-                                storyTarget = null
-                                stories = stories.filterNot { it["_id"] == story["_id"] }
-                                message = "تم حذف القصة"
-                            } catch (e: Exception) {
-                                message = "تعذر حذف القصة: " + (e.localizedMessage ?: "راجع صلاحيات Firebase")
-                            } finally { busy = false }
-                        }
-                    }) {
-                        Icon(Icons.Default.Delete, contentDescription = null)
-                        Spacer(Modifier.width(4.dp))
-                        Text("حذف القصة")
+    storyTarget?.let { selected ->
+        GamerzStoryViewer(
+            stories = stories,
+            startStoryId = selected["_id"]?.toString().orEmpty(),
+            currentUid = currentUid,
+            isOwner = isOwner,
+            db = db,
+            onDismiss = { storyTarget = null },
+            onDeleteStory = { storyId ->
+                scope.launch {
+                    try {
+                        db.collection("stories").document(storyId).delete().await()
+                        stories = stories.filterNot { it["_id"]?.toString() == storyId }
+                        storyTarget = null
+                        message = "تم حذف القصة من Gamerz"
+                    } catch (e: Exception) {
+                        message = e.localizedMessage ?: "تعذر حذف القصة"
                     }
                 }
-            },
-            dismissButton = { TextButton(onClick = { storyTarget = null }) { Text("إغلاق") } }
+            }
         )
     }
     reportTarget?.let { target ->

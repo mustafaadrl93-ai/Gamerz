@@ -172,6 +172,57 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // Players may report inappropriate stories; only the owner reviews reports.
+    // Beta tester feedback: authenticated users can submit, only the owner reads.
+    match /feedback/{feedbackId} {
+      allow read: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'uid', 'type', 'text', 'status', 'createdAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.type in ['bug', 'idea', 'other']
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 10
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'reviewedAt', 'reviewedBy'])
+        && request.resource.data.status in ['reviewed', 'dismissed']
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /storyReports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'storyId', 'storyOwnerUid', 'reporterUid',
+          'reason', 'status', 'createdAt'
+        ])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.storyId is string
+        && exists(/databases/$(database)/documents/stories/$(request.resource.data.storyId))
+        && request.resource.data.storyOwnerUid ==
+          get(/databases/$(database)/documents/stories/$(request.resource.data.storyId)).data.uid
+        && request.resource.data.storyOwnerUid != request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 300
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'reviewedAt', 'reviewedBy'])
+        && request.resource.data.status in ['reviewed', 'dismissed']
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
     match /reports/{reportId} {
       allow read: if isAdmin();
       allow create: if signedIn()

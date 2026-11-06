@@ -8,13 +8,15 @@ Native Android social app for gamers: Kotlin + Jetpack Compose, Firebase Authent
 - PlayStation, Xbox and PC onboarding and profile badges.
 - Neon dark-purple UI with a bottom navigation bar.
 - Personal profile, avatar upload and a gallery of the player's recent posts.
-- Game posts with required image, **required 1–5 star rating**, required 0–100% completion, colored progress bar, and optional review.
-- Feed with Instagram-style pull-to-refresh, story rings, full-screen story viewer and 24-hour story display.
+- Game posts with required title (2–100 chars), required image, **required 1–5 star rating**, required 0–100% completion, colored progress bar, and optional review.
+- Feed with pull-to-refresh, Explore/Following filters, shareable game review cards, story rings and 24-hour story display.
+- Immersive edge-to-edge stories: five seconds per photo, segmented progress, tap to navigate, hold to pause, pull down to close, and settings gear for deletion/reporting/sharing.
+- Publish up to ten photos in one story batch; additional batches can be added throughout the day.
 - Story owner and administrator delete controls.
-- Discover/search page for recently loaded game posts.
+- Discover/search by games, post titles and platform, plus username prefix discovery and player profiles with follow/unfollow counts.
 - Firestore-backed per-account likes and moderated comment threads.
 - In-app activity tab showing recent likes and comments on the user's loaded posts (not push notifications).
-- Reporting and owner-only moderation panel.
+- Reporting of posts and stories, in-app beta feedback submission, and owner-only moderation panels.
 - In-app account deletion with password reauthentication and removal of the user's Firebase profile, post and story documents. A protected **pending media removal request** is created for Uploadcare images.
 
 ## Critical: publish Firestore rules
@@ -45,9 +47,11 @@ Account deletion removes the user's authentication, profile, posts and stories f
 
 - Deploy and test the latest Firestore rules and configure App Check correctly for release.
 - Complete English/Arabic resource localization, RTL testing, accessibility and device test coverage.
-- Push notifications, user search and wider discovery, follow/block tools (the activity tab is not real-time push).
+- Push notifications, advanced player discovery, block/mute tools and abuse-rate limits (the activity tab is not real-time push).
 - Complete account/data/media deletion, including interactions on other users' posts, and remove orphaned uploaded files.
 - Final privacy policy and verified contact address (the current [policy](docs/privacy-policy.md) is a draft).
 - Test the Firebase and Uploadcare quotas, abuse/rate limits and account recovery.
-- Prepare a private signing key, release AAB, store listing and Play Console compliance review.
+- Prepare a private signing key, release AAB, store listing and Play Console compliance review. The beta now targets Android API 36 (Google Play new-app requirement since August 2026).
+- For debug APK beta distribution, Firebase App Check uses its debug provider; if App Check enforcement is enabled, tester devices must be allowed/configured for it, or use a correctly signed Play internal-test release with Play Integrity.
+- Use the phone-friendly [beta test checklist](docs/BETA_TESTING_STORIES.md) to validate every feature before launch.
 
