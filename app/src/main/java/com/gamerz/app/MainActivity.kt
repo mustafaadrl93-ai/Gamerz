@@ -409,6 +409,11 @@ fun GamerzApp() {
                                 Spacer(Modifier.width(8.dp))
                                 Text("تغيير الصورة الرمزية")
                             }
+                            if (isOwner) OutlinedButton(onClick = { page = "admin"; refreshAll() }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Security, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("لوحة إدارة Gamerz")
+                            }
                             Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
                             Text("منصة اللعب: $platform")
@@ -447,6 +452,7 @@ fun GamerzApp() {
                             }
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
+                        "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db)
                         "search" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             GamerzPageHeading("استكشاف الألعاب", "ابحث في آخر المنشورات وأبرز إنجازات اللاعبين")
@@ -630,8 +636,8 @@ fun GamerzApp() {
                         NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
                         NavigationBarItem(selected = page == "search", onClick = { page = "search" }, icon = { Icon(Icons.Default.Search, null) }, label = { Text("استكشاف") })
                         NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null, tint = Color(0xFFC77CFF)) }, label = { Text("نشر") })
+                        NavigationBarItem(selected = page == "activity", onClick = { page = "activity" }, icon = { Icon(Icons.Default.Notifications, null) }, label = { Text("النشاط") })
                         NavigationBarItem(selected = page == "profile", onClick = { page = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("ملفي") })
-                        if (isOwner) NavigationBarItem(selected = page == "admin", onClick = { page = "admin"; refreshAll() }, icon = { Icon(Icons.Default.Security, null) }, label = { Text("الإدارة") })
                     }
 
                 }
