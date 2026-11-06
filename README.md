@@ -10,7 +10,7 @@ Native Android social app for gamers: Kotlin + Jetpack Compose, Firebase Authent
 - **Nine Gamerz Orbit ranks**, with 8 earnable tiers and founder-only #9 (fixed by an owner UID). An inactive player loses effective XP gradually after day three; returning players recover their underlying earned score.
 - **Daily UTC check-ins** with immutable server-validated date IDs and 13 challenge tasks for daily/weekly presence, publishing, game completion, trophies and engagement.
 - Profile displays their rank emblem; public profiles also display the rank. Rankings are cosmetic and computed from Firestore activity, not a server-authoritative leaderboard.
-- **Membership preview** shows Free/Wamda/Sadeem tiers without real prices, checkout, or activation. Read the [secure Play Billing plan](docs/GOOGLE_PLAY_SUBSCRIPTIONS.md) before enabling purchases.
+- **Membership preview** shows Free/Wamda/Sadeem tiers without real prices, checkout, or activation. Firestore includes a read-only user-owned `entitlements` path: all client writes are forbidden; a future verified purchase backend must grant the actual entitlement. Read the [secure Play Billing plan](docs/GOOGLE_PLAY_SUBSCRIPTIONS.md) before enabling purchases.
 - Personal profile, avatar upload, a gallery of the player's recent posts, and a 🏆 golden trophy count shown on every player's profile.
 - PlayStation post completion at 100% asks "هل حققت البلاتينيوم؟"; the user can claim a platinum, counted once per distinct game title. The claim is self-reported and not verified by Sony.
 - Private manual game library (planned / playing / completed); private saved post bookmarks; player blocking/hiding from local feed and stories. Existing follows are removed when blocking.
