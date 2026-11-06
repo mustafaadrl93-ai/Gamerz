@@ -170,7 +170,12 @@ fun GamerzApp() {
     var storyTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var review by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var storyUri by remember { mutableStateOf<Uri?>(null) }
+    var storyUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var storyCaption by remember { mutableStateOf("") }
+    var storyUploadCount by remember { mutableIntStateOf(0) }
+    var feedMode by remember { mutableStateOf("forYou") }
+    var followedUsers by remember { mutableStateOf(setOf<String>()) }
+    var playerResults by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var loggedIn by remember { mutableStateOf(auth.currentUser != null) }
     var busy by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
@@ -179,6 +184,7 @@ fun GamerzApp() {
     var posts by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var stories by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
+    var storyReports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reportTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var commentTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var viewedProfileUid by remember { mutableStateOf<String?>(null) }
@@ -186,7 +192,9 @@ fun GamerzApp() {
     var profileLoaded by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { imageUri = it }
-    val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { storyUri = it }
+    val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        storyUris = uris.take(10)
+    }
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null && currentUid.isNotBlank() && !busy) scope.launch {
             try {
@@ -222,6 +230,20 @@ fun GamerzApp() {
             .limit(100).get().await().documents.mapNotNull { doc ->
                 doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
             }
+        storyReports = db.collection("storyReports").orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(100).get().await().documents.mapNotNull { doc ->
+                doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
+            }
+    }
+    suspend fun refreshFollowing() {
+        if (currentUid.isBlank()) return
+        try {
+            followedUsers = db.collection("follows")
+                .whereEqualTo("followerUid", currentUid)
+                .limit(300).get().await().documents.mapNotNull {
+                    it.getString("targetUid")
+                }.toSet()
+        } catch (_: Exception) { /* Following feed remains available offline. */ }
     }
     fun refreshAll() {
         scope.launch {
@@ -229,6 +251,7 @@ fun GamerzApp() {
                 busy = true
                 refreshFeed()
                 refreshStories()
+                refreshFollowing()
                 if (isOwner) refreshReports()
             } catch (e: Exception) {
                 message = e.localizedMessage ?: "تعذر تحديث المحتوى"
@@ -243,10 +266,28 @@ fun GamerzApp() {
             try {
                 refreshFeed()
                 refreshStories()
+                refreshFollowing()
             } catch (e: Exception) {
                 message = e.localizedMessage ?: "تعذر تحديث الصفحة"
             } finally { refreshing = false }
         }
+    }
+
+    val visiblePosts = if (feedMode == "following") {
+        posts.filter { it["uid"]?.toString().orEmpty() in followedUsers }
+    } else posts
+    LaunchedEffect(page, searchQuery) {
+        if (page == "search" && searchQuery.trim().length >= 2) {
+            delay(350)
+            try {
+                val query = searchQuery.trim()
+                playerResults = db.collection("users").orderBy("username")
+                    .startAt(query).endAt(query + "\uf8ff").limit(15).get().await()
+                    .documents.mapNotNull { d ->
+                        d.data?.toMutableMap()?.apply { put("_uid", d.id) }
+                    }
+            } catch (_: Exception) { playerResults = emptyList() }
+        } else playerResults = emptyList()
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
