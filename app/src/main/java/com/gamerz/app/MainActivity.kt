@@ -340,13 +340,16 @@ fun GamerzApp() {
                     }
                 }
                 Column(Modifier.fillMaxSize()) {
-                    Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Color(0xFF241038), Color(0xFF120E1F)))).padding(horizontal = 18.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column {
-                            Text("GAMERZ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = Color(0xFFE4CCFF))
-                            Text("مساحتك للعب والإنجاز", style = MaterialTheme.typography.labelSmall, color = Color(0xFFC3B2D9))
+                    Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Color(0xFF2A0D46), Color(0xFF110B20), Color(0xFF241039)))).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { page = "activity" }) {
+                            Icon(Icons.Default.NotificationsNone, contentDescription = "النشاط", tint = Color(0xFFE9D6FF))
                         }
-                        Surface(shape = CircleShape, color = Color(0xFF33204D)) {
-                            Icon(Icons.Default.SportsEsports, contentDescription = "Gamerz", tint = Color(0xFFD4B1FF), modifier = Modifier.padding(10.dp).size(24.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFFD9A3FF), modifier = Modifier.size(29.dp))
+                            Text("Gamerz", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = Color(0xFFF0DDFF))
+                        }
+                        IconButton(onClick = { page = "search" }) {
+                            Icon(Icons.Default.Search, contentDescription = "بحث", tint = Color(0xFFE9D6FF))
                         }
                     }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -567,7 +570,7 @@ fun GamerzApp() {
                                                 scope.launch {
                                                     try {
                                                         db.collection("stories").document(story["_id"].toString()).delete().await()
-                                                        refreshStories(); message = "تم حذف القصة"
+                                                        stories = stories.filterNot { it["_id"] == story["_id"] }; message = "تم حذف القصة"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف القصة" }
                                                 }
                                             }) { Text("حذف") }
@@ -765,8 +768,8 @@ fun GamerzApp() {
                                 busy = true
                                 db.collection("stories").document(story["_id"].toString()).delete().await()
                                 storyTarget = null
+                                stories = stories.filterNot { it["_id"] == story["_id"] }
                                 message = "تم حذف القصة"
-                                try { refreshStories() } catch (_: Exception) { }
                             } catch (e: Exception) {
                                 message = "تعذر حذف القصة: " + (e.localizedMessage ?: "راجع صلاحيات Firebase")
                             } finally { busy = false }
