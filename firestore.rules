@@ -13,6 +13,20 @@ service cloud.firestore {
       );
     }
 
+    // Blocks prevent new likes/comments as well as new follows.
+    // Public post reads remain available to signed-in users; blocked accounts
+    // are hidden in the normal app interface.
+    function canInteractWithPost(postId) {
+      let authorUid = get(
+        /databases/$(database)/documents/posts/$(postId)
+      ).data.uid;
+      return !exists(
+        /databases/$(database)/documents/blocks/$(authorUid)/users/$(request.auth.uid)
+      ) && !exists(
+        /databases/$(database)/documents/blocks/$(request.auth.uid)/users/$(authorUid)
+      );
+    }
+
     match /users/{uid} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -172,6 +186,7 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid == likerUid
           && exists(/databases/$(database)/documents/posts/$(postId))
+          && canInteractWithPost(postId)
           && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.createdAt == request.time;
@@ -187,6 +202,7 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if signedIn()
           && exists(/databases/$(database)/documents/posts/$(postId))
+          && canInteractWithPost(postId)
           && request.resource.data.keys().hasOnly(['uid', 'username', 'text', 'createdAt', 'replyTo'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.username == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
