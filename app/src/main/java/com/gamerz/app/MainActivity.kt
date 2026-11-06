@@ -626,6 +626,76 @@ fun GamerzApp() {
             }
         }
     }
+    if (showDeleteAccount) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) showDeleteAccount = false },
+            title = { Text("حذف حساب Gamerz نهائيًا") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("سيتم حذف حسابك وملفك ومنشوراتك وقصصك من Firebase. لا يمكن التراجع عن هذه العملية.")
+                    Text("ملفات الصور لدى Uploadcare تحتاج إزالة منفصلة بواسطة إدارة التطبيق؛ سيتم إرسال طلب إزالتها.",
+                        style = MaterialTheme.typography.bodySmall, color = Color(0xFFFFBF95))
+                    OutlinedTextField(
+                        value = deletePassword, onValueChange = { deletePassword = it },
+                        label = { Text("أدخل كلمة المرور للتأكيد") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !busy && deletePassword.isNotBlank(), onClick = {
+                    scope.launch {
+                        try {
+                            busy = true
+                            val user = auth.currentUser ?: error("الحساب غير متوفر")
+                            val signedInEmail = user.email ?: error("بريد الحساب غير متوفر")
+                            val uid = user.uid
+                            user.reauthenticate(EmailAuthProvider.getCredential(signedInEmail, deletePassword)).await()
+                            val ownedPosts = db.collection("posts").whereEqualTo("uid", uid).get().await().documents
+                            val ownedStories = db.collection("stories").whereEqualTo("uid", uid).get().await().documents
+                            val urls = ownedPosts.mapNotNull { it.getString("imageUrl") } +
+                                ownedStories.mapNotNull { it.getString("imageUrl") } + listOf(avatarUrl)
+                            val imagePaths = urls.mapNotNull { url ->
+                                if (!url.startsWith("https://ucarecdn.com/")) null
+                                else {
+                                    val id = url.removePrefix("https://ucarecdn.com/").substringBefore("/")
+                                    if (id.matches(Regex("[a-f0-9-]{20,40}"))) "uploadcare/" + id else null
+                                }
+                            }.distinct().take(500)
+                            db.collection("deletionRequests").add(mapOf(
+                                "uid" to uid,
+                                "imagePaths" to imagePaths,
+                                "status" to "pending",
+                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            )).await()
+                            for (doc in ownedPosts) doc.reference.delete().await()
+                            for (doc in ownedStories) doc.reference.delete().await()
+                            db.collection("users").document(uid).delete().await()
+                            user.delete().await()
+                            auth.signOut()
+                            loggedIn = false
+                            profileLoaded = false
+                            avatarUrl = ""
+                            platform = ""
+                            posts = emptyList()
+                            stories = emptyList()
+                            page = "feed"
+                            showDeleteAccount = false
+                            message = "حُذف الحساب من Firebase؛ طلب إزالة الصور بانتظار المعالجة."
+                        } catch (e: Exception) {
+                            message = "تعذر إكمال حذف الحساب: " + (e.localizedMessage ?: "راجع اتصالك وقواعد Firebase")
+                        } finally {
+                            busy = false
+                            deletePassword = ""
+                        }
+                    }
+                }) { Text("تأكيد حذف الحساب", color = Color(0xFFE58D93)) }
+            },
+            dismissButton = { TextButton(enabled = !busy, onClick = { showDeleteAccount = false; deletePassword = "" }) { Text("إلغاء") } }
+        )
+    }
+
     storyTarget?.let { story ->
         AlertDialog(
             onDismissRequest = { storyTarget = null },
