@@ -5,6 +5,7 @@ Native Android social app for gamers: Kotlin + Jetpack Compose, Firebase Authent
 ## Implemented in Android source
 
 - Email/password registration and login (Google Sign-In intentionally not used).
+- In-app **Change password** under Profile: requires the current Firebase Authentication email/password, reauthenticates, validates a new unique password of at least 12 characters with confirmation, then calls Firebase Auth `updatePassword` securely. No reset email is needed, no passwords are written to Firestore or logs, and user UID / owner status / founder rank stay unchanged.
 - PlayStation, Xbox and PC onboarding and profile badges.
 - Original Gamerz Orbit UI identity with redesigned top navigation and custom bottom dock, dark ink/violet/cyan highlights, and original Compose Canvas geometric rank marks.
 - **Nine Gamerz Orbit ranks**, with 8 earnable tiers and founder-only #9 (fixed by an owner UID). An inactive player loses effective XP gradually after day three; returning players recover their underlying earned score.
