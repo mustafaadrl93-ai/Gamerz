@@ -18,7 +18,7 @@ Replace **all** current Firestore Rules with:
 https://raw.githubusercontent.com/mustafaadrl93-ai/Gamerz/main/firestore.rules
 and press **Publish**.
 
-The new `users/{uid}/checkins/{dayId}` collection is covered only in this rules revision. Without publishing it, the attendance action will fail with permission denied.
+The new `users/{uid}/checkins/{dayId}` collection is covered only in this rules revision. Check-in documents are normally immutable; account deletion removes the user profile and then its attendance records. Without publishing it, the attendance action will fail with permission denied.
 
 ## Test using Android only
 1. Install the newest debug APK on top of the previous version without clearing user data.
