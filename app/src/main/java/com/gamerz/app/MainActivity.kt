@@ -1318,6 +1318,11 @@ fun GamerzApp() {
                                 for (link in links.documents) link.reference.delete().await()
                             }
                             db.collection("users").document(uid).delete().await()
+                            // Check-ins can be deleted only after the parent user profile
+                            // is removed, keeping everyday check-ins immutable otherwise.
+                            val checkins = db.collection("users").document(uid)
+                                .collection("checkins").get().await().documents
+                            for (visit in checkins) visit.reference.delete().await()
                             user.delete().await()
                             auth.signOut()
                             loggedIn = false
