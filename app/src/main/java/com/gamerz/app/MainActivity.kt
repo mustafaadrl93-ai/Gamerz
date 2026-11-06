@@ -163,6 +163,7 @@ fun GamerzApp() {
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var game by remember { mutableStateOf("") }
+    var postTitle by remember { mutableStateOf("") }
     var completion by remember { mutableStateOf("0") }
     var rating by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
@@ -180,6 +181,7 @@ fun GamerzApp() {
     var reports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reportTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var commentTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var viewedProfileUid by remember { mutableStateOf<String?>(null) }
     var reportReason by remember { mutableStateOf("") }
     var profileLoaded by remember { mutableStateOf(false) }
 
@@ -364,7 +366,7 @@ fun GamerzApp() {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (page) {
                         "create" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            GamerzPageHeading("منشور جديد", "شارك اللعبة، تقييمك والإنجاز مع مجتمع Gamerz")
+                            GamerzPageHeading("شارك إنجازك", "أضف عنوانًا مميزًا وصورة وقيّم لعبتك مع المجتمع")
                             Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172C))) {
                                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     if (imageUri != null) {
@@ -383,7 +385,16 @@ fun GamerzApp() {
                                     }
                                 }
                             }
-                            OutlinedTextField(game, { game = it.take(80) }, label = { Text("اسم اللعبة *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            OutlinedTextField(postTitle, { postTitle = it.take(100) },
+                                label = { Text("عنوان المنشور *") },
+                                placeholder = { Text("مثال: أخيرًا حققت البلاتينيوم!") },
+                                leadingIcon = { Icon(Icons.Default.Edit, null) },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                shape = RoundedCornerShape(16.dp))
+                            Text("العنوان إلزامي ويظهر فوق اسم اللعبة", color = Color(0xFFBDA6D0),
+                                style = MaterialTheme.typography.labelSmall)
+                            OutlinedTextField(game, { game = it.take(80) }, label = { Text("اسم اللعبة *") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                shape = RoundedCornerShape(16.dp))
                             Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172C))) {
                                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text("تقييمك للعبة *", fontWeight = FontWeight.Bold)
@@ -399,6 +410,7 @@ fun GamerzApp() {
                                     try {
                                         busy = true
                                         val percent = completion.toIntOrNull() ?: error("أدخل نسبة صحيحة")
+                                        require(postTitle.trim().length in 2..100) { "عنوان المنشور مطلوب (من حرفين إلى 100 حرف)" }
                                         require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة الإكمال مطلوبة" }
                                         require(rating in 1..5) { "يجب اختيار تقييم من 1 إلى 5 نجوم قبل النشر" }
                                         require(platform.isNotBlank()) { "اختر منصات اللعب واحفظها من صفحة ملفي قبل النشر" }
@@ -406,13 +418,13 @@ fun GamerzApp() {
                                         val (url, uploadPath) = uploadImageToUploadcare(bytes)
                                         db.collection("posts").add(mapOf(
                                             "uid" to currentUid, "platform" to platform,
-                                            "gameName" to game.trim(), "completion" to percent, "rating" to rating,
+                                            "gameName" to game.trim(), "title" to postTitle.trim(), "completion" to percent, "rating" to rating,
                                             "imageUrl" to url, "storagePath" to uploadPath,
                                             "pros" to review.trim().take(500), "cons" to "",
                                             "platinum" to false, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                             "likes" to 0, "commentCount" to 0
                                         )).await()
-                                        game = ""; completion = "0"; rating = 0; review = ""; imageUri = null
+                                        game = ""; postTitle = ""; completion = "0"; rating = 0; review = ""; imageUri = null
                                         message = "تم نشر المنشور"; page = "feed"; refreshFeed()
                                     } catch (e: Exception) { message = e.localizedMessage ?: "فشل النشر" }
                                     finally { busy = false }
@@ -436,10 +448,23 @@ fun GamerzApp() {
                                     }
                                 }
                             }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(posts.count { it["uid"] == currentUid }.toString(), fontWeight = FontWeight.Bold); Text("منشورات", color = Color(0xFFB9ADC9)) }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(stories.count { it["uid"] == currentUid }.toString(), fontWeight = FontWeight.Bold); Text("قصص", color = Color(0xFFB9ADC9)) }
+                            Card(shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF22192F))) {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 15.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(posts.count { it["uid"] == currentUid }.toString(),
+                                            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                                        Text("منشورات", color = Color(0xFFB9ADC9),
+                                            style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    GamerzFollowStats(profileUid = currentUid, db = db,
+                                        modifier = Modifier.weight(2f))
+                                }
                             }
+                            Text("قصصك النشطة: " + stories.count { it["uid"] == currentUid },
+                                style = MaterialTheme.typography.labelMedium, color = Color(0xFFB9ADC9))
                             OutlinedButton(enabled = !busy, onClick = { avatarPicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Default.Edit, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
@@ -505,7 +530,7 @@ fun GamerzApp() {
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
-                                label = { Text("ابحث باسم لعبة أو منصة") },
+                                label = { Text("ابحث بعنوان أو لعبة أو منصة") },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(16.dp),
@@ -514,6 +539,7 @@ fun GamerzApp() {
                             val results = posts.filter { post ->
                                 searchQuery.isBlank() ||
                                     post["gameName"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
+                                    post["title"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
                                     post["platform"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true)
                             }
                             Text(if (searchQuery.isBlank()) "أحدث الألعاب في المجتمع" else "نتائج البحث: " + results.size,
@@ -529,7 +555,12 @@ fun GamerzApp() {
                                             contentScale = ContentScale.Crop, modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp)))
                                         Spacer(Modifier.width(12.dp))
                                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(post["gameName"]?.toString().orEmpty(), fontWeight = FontWeight.Bold)
+                                            Text(post["title"]?.toString().orEmpty()
+                                                .ifBlank { post["gameName"]?.toString().orEmpty() },
+                                                fontWeight = FontWeight.Bold, maxLines = 2)
+                                            Text(post["gameName"]?.toString().orEmpty(),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFFBAACCD))
                                             GamerzPlatformBadge(post["platform"]?.toString().orEmpty())
                                             GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
                                         }
@@ -631,16 +662,31 @@ fun GamerzApp() {
                                 }
                             }
                             items(posts) { post ->
-                                Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF191622))) {
+                                Card(Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172A)),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                                    border = BorderStroke(1.dp, Color(0xFF3B2B4D))) {
                                     Column(Modifier.fillMaxWidth()) {
                                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                             GamerzPostAuthor(uid = post["uid"]?.toString().orEmpty(), fallbackPlatform = post["platform"]?.toString().orEmpty(),
-                                                db = db, modifier = Modifier.weight(1f))
+                                                db = db, modifier = Modifier.weight(1f),
+                                                onOpenProfile = { if (it != currentUid) viewedProfileUid = it else page = "profile" })
+                                            GamerzFollowButton(currentUid = currentUid,
+                                                targetUid = post["uid"]?.toString().orEmpty(),
+                                                db = db, modifier = Modifier.height(36.dp))
+                                            Spacer(Modifier.width(6.dp))
                                             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
                                         AsyncImage(model = displayImageUrl(post["imageUrl"]), contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(280.dp).background(Color(0xFF0E0B18)))
                                         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                                            Text(post["gameName"]?.toString().orEmpty(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                                            Text(post["title"]?.toString().orEmpty()
+                                                .ifBlank { post["gameName"]?.toString().orEmpty() },
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.ExtraBold, color = Color(0xFFF2E3FF))
+                                            Text("🎮 " + post["gameName"]?.toString().orEmpty(),
+                                                color = Color(0xFFC3A9D8),
+                                                style = MaterialTheme.typography.bodyMedium)
                                             GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
                                             GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
@@ -650,7 +696,7 @@ fun GamerzApp() {
                                             TextButton(onClick = { commentTarget = post }) {
                                                 Icon(Icons.Default.ChatBubbleOutline, contentDescription = null)
                                                 Spacer(Modifier.width(4.dp))
-                                                Text("تعليق")
+                                                Text("التعليقات")
                                             }
                                             Spacer(Modifier.weight(1f))
                                             TextButton(onClick = { reportTarget = post; reportReason = "" }) { Text("إبلاغ") }
@@ -718,9 +764,9 @@ fun GamerzApp() {
                             val urls = ownedPosts.mapNotNull { it.getString("imageUrl") } +
                                 ownedStories.mapNotNull { it.getString("imageUrl") } + listOf(avatarUrl)
                             val imagePaths = urls.mapNotNull { url ->
-                                if (!url.startsWith("https://26vsxjozef.ucarecd.net/")) null
+                                if (!displayImageUrl(url).startsWith("https://26vsxjozef.ucarecd.net/")) null
                                 else {
-                                    val id = url.removePrefix("https://26vsxjozef.ucarecd.net/").substringBefore("/")
+                                    val id = displayImageUrl(url).removePrefix("https://26vsxjozef.ucarecd.net/").substringBefore("/")
                                     if (id.matches(Regex("[a-f0-9-]{20,40}"))) "uploadcare/" + id else null
                                 }
                             }.distinct().take(500)
@@ -737,6 +783,11 @@ fun GamerzApp() {
                                 doc.reference.delete().await()
                             }
                             for (doc in ownedStories) doc.reference.delete().await()
+                            // Clean both sides of follow relationships before deleting the profile.
+                            for (field in listOf("followerUid", "targetUid")) {
+                                val links = db.collection("follows").whereEqualTo(field, uid).get().await()
+                                for (link in links.documents) link.reference.delete().await()
+                            }
                             db.collection("users").document(uid).delete().await()
                             user.delete().await()
                             auth.signOut()
@@ -765,7 +816,15 @@ fun GamerzApp() {
     commentTarget?.let { target ->
         GamerzCommentsDialog(
             postId = target["_id"].toString(), uid = currentUid, isOwner = isOwner,
-            db = db, onDismiss = { commentTarget = null }
+            db = db, onDismiss = { commentTarget = null },
+            postTitle = target["title"]?.toString().orEmpty()
+                .ifBlank { target["gameName"]?.toString().orEmpty() }
+        )
+    }
+    viewedProfileUid?.let { targetUid ->
+        GamerzPublicProfileSheet(
+            targetUid = targetUid, currentUid = currentUid,
+            db = db, posts = posts, onDismiss = { viewedProfileUid = null }
         )
     }
     storyTarget?.let { story ->

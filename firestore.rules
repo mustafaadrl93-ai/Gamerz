@@ -5,9 +5,12 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn() && request.auth.uid == 'NdoyBz3UMcWGWQ3DhuwrIbVbZvl2';
     }
+    // Keep existing posts readable and accept the current Uploadcare delivery host.
     function validImage(url) {
-      return url is string
-        && url.matches('^https://ucarecdn\\.com/[a-f0-9-]{20,40}/$');
+      return url is string && (
+        url.matches('^https://ucarecdn\\.com/[a-f0-9-]{20,40}/$') ||
+        url.matches('^https://26vsxjozef\\.ucarecd\\.net/[a-f0-9-]{20,40}/$')
+      );
     }
 
     match /users/{uid} {
@@ -41,11 +44,31 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
+    // A single document per follower/target pair prevents duplicate follows.
+    // Count followers/following with Firestore count queries; no editable counters.
+    match /follows/{followId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['followerUid', 'targetUid', 'createdAt'])
+        && request.resource.data.followerUid == request.auth.uid
+        && request.resource.data.targetUid is string
+        && request.resource.data.targetUid != request.auth.uid
+        && followId == request.auth.uid + '_' + request.resource.data.targetUid
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.targetUid))
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      // You can unfollow, or remove someone who follows your own profile.
+      allow delete: if signedIn() && (
+        isAdmin() || resource.data.followerUid == request.auth.uid ||
+        resource.data.targetUid == request.auth.uid
+      );
+    }
+
     match /posts/{postId} {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
-          'uid', 'platform', 'gameName', 'completion', 'rating', 'imageUrl',
+          'uid', 'platform', 'gameName', 'title', 'completion', 'rating', 'imageUrl',
           'storagePath', 'pros', 'cons', 'platinum', 'createdAt',
           'likes', 'commentCount'
         ])
@@ -55,6 +78,9 @@ service cloud.firestore {
         && request.resource.data.gameName is string
         && request.resource.data.gameName.size() > 0
         && request.resource.data.gameName.size() <= 80
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 2
+        && request.resource.data.title.size() <= 100
         && request.resource.data.completion is int
         && request.resource.data.completion >= 0
         && request.resource.data.completion <= 100
@@ -96,12 +122,15 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if signedIn()
           && exists(/databases/$(database)/documents/posts/$(postId))
-          && request.resource.data.keys().hasOnly(['uid', 'username', 'text', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['uid', 'username', 'text', 'createdAt', 'replyTo'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.username == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 500
+          && (!('replyTo' in request.resource.data) ||
+              (request.resource.data.replyTo is string &&
+               exists(/databases/$(database)/documents/posts/$(postId)/comments/$(request.resource.data.replyTo))))
           && request.resource.data.createdAt == request.time;
         allow update: if false;
         allow delete: if signedIn() && (
