@@ -608,6 +608,20 @@ fun GamerzApp() {
                                 Spacer(Modifier.width(8.dp))
                                 Text("لوحة إدارة Gamerz")
                             }
+                            OutlinedButton(
+                                onClick = { page = "change_password" },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color(0xFF231B34)),
+                                border = BorderStroke(1.dp, Color(0xFF7855AA))
+                            ) {
+                                Icon(Icons.Default.Lock, contentDescription = null,
+                                    tint = Color(0xFFCEADFF))
+                                Spacer(Modifier.width(9.dp))
+                                Text("🔐 تغيير كلمة المرور", fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE9D8FF))
+                            }
                             Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
                             Text("منصات اللعب (اختر واحدة أو أكثر)")
@@ -668,6 +682,7 @@ fun GamerzApp() {
                         "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db, blockedUsers = blockedUsers)
                         "achievements" -> GamerzOrbitRankHub(currentUid, db)
                         "membership" -> GamerzMembershipPreview(onBack = { page = "profile" })
+                        "change_password" -> GamerzChangePasswordScreen(onBack = { page = "profile" })
                         "library" -> GamerzLibraryScreen(currentUid, db)
                         "saved" -> GamerzSavedScreen(currentUid, db, blockedUsers) { playerUid ->
                             if (playerUid != currentUid) viewedProfileUid = playerUid
