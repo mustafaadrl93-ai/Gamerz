@@ -27,13 +27,16 @@ private data class ActivityEvent(
 )
 
 @Composable
-fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: FirebaseFirestore) {
+fun GamerzActivityScreen(
+    posts: List<Map<String, Any>>, uid: String,
+    db: FirebaseFirestore, blockedUsers: Set<String> = emptySet()
+) {
     var events by remember { mutableStateOf(listOf<ActivityEvent>()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var refresh by remember(uid) { mutableIntStateOf(0) }
 
-    LaunchedEffect(uid, posts, refresh) {
+    LaunchedEffect(uid, posts, refresh, blockedUsers) {
         loading = true
         error = ""
         try {
@@ -45,7 +48,7 @@ fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: Firebas
                 val likes = postRef.collection("likes").orderBy("createdAt", Query.Direction.DESCENDING)
                     .limit(5).get().await().documents
                 for (like in likes) {
-                    if (like.getString("uid") != uid) {
+                    if (like.getString("uid") != uid && like.getString("uid") !in blockedUsers) {
                         result.add(ActivityEvent("إعجاب بمنشورك", "أعجب لاعب بمنشورك عن " + game,
                             like.getTimestamp("createdAt")?.seconds ?: 0L, true))
                     }
@@ -53,7 +56,7 @@ fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: Firebas
                 val comments = postRef.collection("comments").orderBy("createdAt", Query.Direction.DESCENDING)
                     .limit(5).get().await().documents
                 for (comment in comments) {
-                    if (comment.getString("uid") != uid) {
+                    if (comment.getString("uid") != uid && comment.getString("uid") !in blockedUsers) {
                         val name = comment.getString("username").orEmpty().ifBlank { "لاعب" }
                         result.add(ActivityEvent("تعليق جديد من " + name,
                             "على " + game + ": " + comment.getString("text").orEmpty().take(85),
@@ -67,7 +70,7 @@ fun GamerzActivityScreen(posts: List<Map<String, Any>>, uid: String, db: Firebas
                 .limit(50).get().await().documents
             for (follow in followers) {
                 val followerUid = follow.getString("followerUid").orEmpty()
-                if (followerUid.isNotBlank() && followerUid != uid) {
+                if (followerUid.isNotBlank() && followerUid != uid && followerUid !in blockedUsers) {
                     result.add(ActivityEvent(
                         "متابع جديد 🎮", "لاعب جديد يتابع ملفك في Gamerz",
                         follow.getTimestamp("createdAt")?.seconds ?: 0L,
