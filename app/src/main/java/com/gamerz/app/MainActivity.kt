@@ -493,6 +493,42 @@ fun GamerzApp() {
             }
         }
     }
+    storyTarget?.let { story ->
+        AlertDialog(
+            onDismissRequest = { storyTarget = null },
+            title = { Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب") },
+            text = {
+                AsyncImage(
+                    model = story["imageUrl"],
+                    contentDescription = "قصة بملء الشاشة",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().height(400.dp).clip(RoundedCornerShape(16.dp))
+                )
+            },
+            confirmButton = {
+                if (story["uid"] == currentUid || isOwner) {
+                    TextButton(enabled = !busy, onClick = {
+                        scope.launch {
+                            try {
+                                busy = true
+                                db.collection("stories").document(story["_id"].toString()).delete().await()
+                                storyTarget = null
+                                message = "تم حذف القصة"
+                                try { refreshStories() } catch (_: Exception) { }
+                            } catch (e: Exception) {
+                                message = "تعذر حذف القصة: " + (e.localizedMessage ?: "راجع صلاحيات Firebase")
+                            } finally { busy = false }
+                        }
+                    }) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("حذف القصة")
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = { storyTarget = null }) { Text("إغلاق") } }
+        )
+    }
     reportTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { reportTarget = null },
