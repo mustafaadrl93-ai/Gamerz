@@ -32,3 +32,6 @@
 - Validate Firebase security rules against malicious clients, image moderation and spam handling, plus Uploadcare trial/quota status.
 - Check release signing, Play Integrity App Check, crash reporting, Google Sign-In setup if advertised, and Google Play review requirements.
 - Do not store Uploadcare secret keys or service-account credentials in this public GitHub repository.
+
+## Additional Gamerz 2.0 features
+See [Gamerz 2.0 beta test guide](BETA_TESTING_GAMERZ_2.md) for the self-reported trophy confirmation, private library, weekly challenges and saved posts.
