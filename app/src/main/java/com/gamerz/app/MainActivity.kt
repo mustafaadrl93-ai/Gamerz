@@ -611,16 +611,13 @@ fun GamerzApp() {
                                 Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF191622))) {
                                     Column(Modifier.fillMaxWidth()) {
                                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.AccountCircle, contentDescription = null, tint = Color(0xFFB78AFF), modifier = Modifier.size(36.dp))
-                                            Spacer(Modifier.width(10.dp))
-                                            Column(Modifier.weight(1f)) {
-                                                Text(post["gameName"]?.toString() ?: "Game", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                                Text(post["platform"]?.toString()?.takeIf { it.isNotBlank() } ?: "لاعب Gamerz", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB9ADC9))
-                                            }
+                                            GamerzPostAuthor(uid = post["uid"]?.toString().orEmpty(), fallbackPlatform = post["platform"]?.toString().orEmpty(),
+                                                db = db, modifier = Modifier.weight(1f))
                                             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
                                         AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(280.dp).background(Color(0xFF0E0B18)))
                                         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                            Text(post["gameName"]?.toString().orEmpty(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                                             GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
                                             GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
