@@ -9,6 +9,15 @@
 - Choose real prices and countries **inside Play Console**, never hard-code or invent amounts. Do not claim a monthly price until it has been approved and activated.
 - No feature may grant official platform verification or imply a relationship with a console brand.
 
+## Receiving income in Bahrain
+According to Google's supported-location list, **Bahrain supports developer and merchant registration**, and its merchant default currency is **USD**. Google also lists Bahrain as supported for bank-transfer payouts. Setup requires a matching Bahrain merchant payments profile, identification/verification as applicable, and a bank account in the registered country that can receive the required transfer currency. Verify all bank and tax details directly in Play Console before enabling transactions. Do not place bank details or personal identification documents in the public repository.
+
+References:
+- https://support.google.com/googleplay/android-developer/answer/9306917
+- https://support.google.com/googleplay/android-developer/answer/2700656
+- https://support.google.com/googleplay/android-developer/answer/7161440
+- https://support.google.com/googleplay/android-developer/answer/3092739
+
 ## Steps
 1. Finish Play Developer account setup (organization/individual), merchant/payments profile, supported payout bank account, and tax/identity verification as required by Google Play and the country of registration.
 2. Upload an internal-test **signed release AAB** for `com.gamerz.app` using a secure private upload key (do not publish credentials in GitHub).
