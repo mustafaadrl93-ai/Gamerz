@@ -229,7 +229,9 @@ fun GamerzOrbitSigil(rank: Int, modifier: Modifier = Modifier, size: Dp = 66.dp)
 
 @Composable
 fun GamerzOrbitRankPill(uid: String, db: FirebaseFirestore) {
-    var rank by remember(uid) { mutableStateOf(orbitRanks.first()) }
+    var rank by remember(uid) {
+        mutableStateOf(if (uid == ORBIT_FOUNDER_UID) orbitRanks.last() else orbitRanks.first())
+    }
     LaunchedEffect(uid) {
         if (uid.isBlank()) return@LaunchedEffect
         if (uid == ORBIT_FOUNDER_UID) {
