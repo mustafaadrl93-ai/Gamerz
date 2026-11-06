@@ -121,6 +121,7 @@ fun GamerzApp() {
     val currentUid = auth.currentUser?.uid.orEmpty()
     val isOwner = currentUid == OWNER_UID
 
+    var authMode by remember { mutableStateOf("login") }
     var platform by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -204,50 +205,84 @@ fun GamerzApp() {
     )) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (!loggedIn) {
-                Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1B0731), Color(0xFF090711), Color(0xFF140920)))).padding(22.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("♛  GAMERZ", style = MaterialTheme.typography.displayLarge, color = MaterialTheme.colorScheme.primary)
-                    Text("🎮  العب • شارك • اكتشف", style = MaterialTheme.typography.titleMedium)
-                    Text("مجتمع اللاعبين", style = MaterialTheme.typography.titleMedium)
+                Column(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(Color(0xFF25103F), Color(0xFF0A0713), Color(0xFF150921)))
+                    ).verticalScroll(rememberScrollState()).padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
                     Spacer(Modifier.height(20.dp))
-                    if (platform.isBlank()) {
-                        Text("اختر منصة اللعب")
-                        listOf("PlayStation", "Xbox", "PC").forEach { value ->
-                            OutlinedButton(onClick = { platform = value }, modifier = Modifier.fillMaxWidth()) { Text(value) }
+                    Surface(shape = RoundedCornerShape(28.dp), color = Color(0xFF3B1660), shadowElevation = 12.dp) {
+                        Icon(Icons.Default.SportsEsports, contentDescription = "Gamerz", tint = Color(0xFFE5B8FF),
+                            modifier = Modifier.padding(18.dp).size(62.dp))
+                    }
+                    Text("Gamerz", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black, color = Color(0xFFEBDAFF))
+                    Text("قيمرز • مجتمع اللاعبين", color = Color(0xFFC8ADE0))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(onClick = { authMode = "login"; message = "" }, modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (authMode == "login") Color(0xFF902FD7) else Color(0xFF30203F)),
+                            shape = RoundedCornerShape(14.dp)) { Text("تسجيل الدخول") }
+                        Button(onClick = { authMode = "register"; message = "" }, modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (authMode == "register") Color(0xFF902FD7) else Color(0xFF30203F)),
+                            shape = RoundedCornerShape(14.dp)) { Text("إنشاء حساب") }
+                    }
+                    if (authMode == "register") {
+                        Text("اختر منصة اللعب الأساسية", modifier = Modifier.fillMaxWidth(),
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        listOf("PlayStation", "Xbox", "PC").forEach { choice ->
+                            OutlinedButton(onClick = { platform = choice }, modifier = Modifier.fillMaxWidth().height(51.dp),
+                                border = BorderStroke(if (platform == choice) 2.dp else 1.dp,
+                                    if (platform == choice) Color(0xFFC175FF) else Color(0xFF58426D)),
+                                shape = RoundedCornerShape(15.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(containerColor = if (platform == choice) Color(0xFF302046) else Color(0xFF171022))) {
+                                Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFFC68DFF))
+                                Spacer(Modifier.width(12.dp))
+                                Text(choice, fontWeight = FontWeight.Bold)
+                            }
                         }
-                    } else {
-                        OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب عند إنشاء حساب") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(email, { email = it }, label = { Text(stringResource(R.string.email)) }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(password, { password = it }, label = { Text(stringResource(R.string.password)) }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                        Button(enabled = !busy, onClick = {
-                            scope.launch {
-                                try {
-                                    busy = true
-                                    require(username.trim().matches(Regex("^[A-Za-z0-9_]{2,20}$"))) { "اسم اللاعب يجب أن يكون 2-20 حرفًا أو رقمًا أو _" }
-                                    val user = auth.createUserWithEmailAndPassword(email.trim(), password).await().user!!
+                        OutlinedTextField(value = username, onValueChange = { username = it.take(20) },
+                            label = { Text("اسم اللاعب (حروف وأرقام)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    }
+                    OutlinedTextField(value = email, onValueChange = { email = it.trim() },
+                        label = { Text("البريد الإلكتروني") }, leadingIcon = { Icon(Icons.Default.MailOutline, contentDescription = null) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = password, onValueChange = { password = it },
+                        label = { Text("كلمة المرور") }, leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    GamerzAccentButton(
+                        text = if (authMode == "register") "إنشاء حساب Gamerz" else "دخول إلى Gamerz",
+                        enabled = !busy
+                    ) {
+                        scope.launch {
+                            try {
+                                busy = true
+                                require(email.isNotBlank() && password.isNotBlank()) { "أدخل البريد وكلمة المرور" }
+                                if (authMode == "register") {
+                                    require(platform in listOf("PlayStation", "Xbox", "PC")) { "اختر منصة اللعب" }
+                                    require(username.trim().matches(Regex("^[A-Za-z0-9_]{2,20}$"))) {
+                                        "اسم اللاعب يجب أن يكون من 2 إلى 20 حرفًا أو رقمًا أو _"
+                                    }
+                                    val user = auth.createUserWithEmailAndPassword(email.trim(), password).await().user
+                                        ?: error("تعذّر إنشاء الحساب")
                                     db.collection("users").document(user.uid).set(mapOf(
                                         "username" to username.trim(), "platform" to platform,
                                         "createdAt" to System.currentTimeMillis()
                                     )).await()
-                                    loggedIn = true
-                                    message = "تم إنشاء الحساب"
-                                } catch (e: Exception) { message = e.localizedMessage ?: "تعذر إنشاء الحساب" }
-                                finally { busy = false }
-                            }
-                        }, modifier = Modifier.fillMaxWidth()) { Text("إنشاء حساب") }
-                        OutlinedButton(enabled = !busy, onClick = {
-                            scope.launch {
-                                try {
-                                    busy = true
+                                } else {
                                     auth.signInWithEmailAndPassword(email.trim(), password).await()
-                                    loggedIn = true
-                                    message = "تم تسجيل الدخول"
-                                } catch (e: Exception) { message = e.localizedMessage ?: "تعذر تسجيل الدخول" }
-                                finally { busy = false }
-                            }
-                        }, modifier = Modifier.fillMaxWidth()) { Text("تسجيل الدخول") }
-                        TextButton(onClick = { platform = "" }) { Text("تغيير المنصة") }
+                                }
+                                profileLoaded = false
+                                loggedIn = true
+                                message = ""
+                            } catch (e: Exception) {
+                                message = e.localizedMessage ?: "تعذر تسجيل الدخول"
+                            } finally { busy = false }
+                        }
                     }
-                    if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.secondary)
+                    if (busy) CircularProgressIndicator(modifier = Modifier.size(28.dp), color = Color(0xFFC47CFF))
+                    if (message.isNotBlank()) Text(message, color = Color(0xFFFFB0B0), style = MaterialTheme.typography.bodyMedium)
+                    Text("GAMERZ • العب، شارك، اكتشف", color = Color(0xFFAE94C5), style = MaterialTheme.typography.labelSmall)
                 }
             } else {
                 LaunchedEffect(loggedIn) {
