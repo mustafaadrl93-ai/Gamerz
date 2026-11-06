@@ -95,9 +95,8 @@ private suspend fun uploadImageToUploadcare(bytes: ByteArray): Pair<String, Stri
 private fun readCompressedImage(context: android.content.Context, uri: Uri): ByteArray {
     val resolver = context.contentResolver
     val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    resolver.openInputStream(uri)?.use {
-        android.graphics.BitmapFactory.decodeStream(it, null, bounds)
-    } ?: error("تعذر قراءة الصورة")
+    val boundsInput = resolver.openInputStream(uri) ?: error("تعذر قراءة الصورة")
+    boundsInput.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
     require(bounds.outWidth > 0 && bounds.outHeight > 0) { "ملف الصورة غير صالح" }
 
     // Decode a reduced bitmap before allocating memory: modern camera photos
