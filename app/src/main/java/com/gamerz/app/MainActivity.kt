@@ -335,10 +335,14 @@ fun GamerzApp() {
                                     Spacer(Modifier.width(12.dp))
                                     Column {
                                         Text(username.ifBlank { "لاعب Gamerz" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                        Text(platform.ifBlank { "منصة غير محددة" }, color = Color(0xFFD8BBFF))
+                                        GamerzPlatformBadge(platform)
                                         Text(auth.currentUser?.email.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
                                     }
                                 }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(posts.count { it["uid"] == currentUid }.toString(), fontWeight = FontWeight.Bold); Text("منشورات", color = Color(0xFFB9ADC9)) }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(stories.count { it["uid"] == currentUid }.toString(), fontWeight = FontWeight.Bold); Text("قصص", color = Color(0xFFB9ADC9)) }
                             }
                             Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
@@ -460,7 +464,9 @@ fun GamerzApp() {
                                             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
                                         AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(280.dp).background(Color(0xFF0E0B18)))
-                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                            GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
+                                            GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
                                         Row(Modifier.padding(horizontal = 8.dp)) {
@@ -484,7 +490,8 @@ fun GamerzApp() {
                     if (message.isNotBlank() && page != "feed") Text(message, modifier = Modifier.padding(8.dp), color = MaterialTheme.colorScheme.secondary)
                     NavigationBar(containerColor = Color(0xFF130F1D), tonalElevation = 8.dp, modifier = Modifier.fillMaxWidth()) {
                         NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
-                        NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null) }, label = { Text("نشر") })
+                        NavigationBarItem(selected = page == "search", onClick = { page = "search" }, icon = { Icon(Icons.Default.Search, null) }, label = { Text("استكشاف") })
+                        NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null, tint = Color(0xFFC77CFF)) }, label = { Text("نشر") })
                         NavigationBarItem(selected = page == "profile", onClick = { page = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("ملفي") })
                         if (isOwner) NavigationBarItem(selected = page == "admin", onClick = { page = "admin"; refreshAll() }, icon = { Icon(Icons.Default.Security, null) }, label = { Text("الإدارة") })
                     }
