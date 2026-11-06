@@ -37,6 +37,37 @@ private fun platinumGames(posts: List<Map<String, Any>>): Int =
     }.filter { it.isNotEmpty() }.distinct().size
 
 @Composable
+fun GamerzPlatinumCounter(
+    profileUid: String, db: FirebaseFirestore,
+    modifier: Modifier = Modifier
+) {
+    var count by remember(profileUid) { mutableIntStateOf(0) }
+    LaunchedEffect(profileUid) {
+        if (profileUid.isBlank()) return@LaunchedEffect
+        try {
+            val authored = db.collection("posts").whereEqualTo("uid", profileUid)
+                .limit(500).get().await().documents.mapNotNull { it.data }
+            count = platinumGames(authored)
+        } catch (_: Exception) { }
+    }
+    Surface(modifier, shape = RoundedCornerShape(14.dp),
+        color = Color(0xFF44301E),
+        border = BorderStroke(1.dp, gamerzGold)) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("🏆", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.width(6.dp))
+            Text(count.toString(), color = gamerzGold,
+                fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.width(4.dp))
+            Text("بلاتينيوم", color = Color(0xFFFFE4B1),
+                style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
 fun GamerzAchievementsPanel(
     profileUid: String,
     db: FirebaseFirestore,
