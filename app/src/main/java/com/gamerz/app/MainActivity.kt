@@ -148,6 +148,7 @@ fun GamerzApp() {
     var stories by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reports by remember { mutableStateOf(listOf<Map<String, Any>>()) }
     var reportTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var commentTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var reportReason by remember { mutableStateOf("") }
     var profileLoaded by remember { mutableStateOf(false) }
 
@@ -595,12 +596,23 @@ fun GamerzApp() {
                                             GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
-                                        Row(Modifier.padding(horizontal = 8.dp)) {
+                                        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            GamerzLikeButton(postId = post["_id"].toString(), uid = currentUid, db = db)
+                                            TextButton(onClick = { commentTarget = post }) {
+                                                Icon(Icons.Default.ChatBubbleOutline, contentDescription = null)
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("تعليق")
+                                            }
+                                            Spacer(Modifier.weight(1f))
                                             TextButton(onClick = { reportTarget = post; reportReason = "" }) { Text("إبلاغ") }
                                             if (post["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        db.collection("posts").document(post["_id"].toString()).delete().await()
+                                                        val postRef = db.collection("posts").document(post["_id"].toString())
+                                                        for (collectionName in listOf("likes", "comments")) {
+                                                            for (item in postRef.collection(collectionName).get().await().documents) item.reference.delete().await()
+                                                        }
+                                                        postRef.delete().await()
                                                         refreshFeed(); message = "تم حذف المنشور"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف المنشور" }
                                                 }
@@ -669,7 +681,12 @@ fun GamerzApp() {
                                 "status" to "pending",
                                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                             )).await()
-                            for (doc in ownedPosts) doc.reference.delete().await()
+                            for (doc in ownedPosts) {
+                                for (collectionName in listOf("likes", "comments")) {
+                                    for (item in doc.reference.collection(collectionName).get().await().documents) item.reference.delete().await()
+                                }
+                                doc.reference.delete().await()
+                            }
                             for (doc in ownedStories) doc.reference.delete().await()
                             db.collection("users").document(uid).delete().await()
                             user.delete().await()
@@ -696,6 +713,12 @@ fun GamerzApp() {
         )
     }
 
+    commentTarget?.let { target ->
+        GamerzCommentsDialog(
+            postId = target["_id"].toString(), uid = currentUid, isOwner = isOwner,
+            db = db, onDismiss = { commentTarget = null }
+        )
+    }
     storyTarget?.let { story ->
         AlertDialog(
             onDismissRequest = { storyTarget = null },
