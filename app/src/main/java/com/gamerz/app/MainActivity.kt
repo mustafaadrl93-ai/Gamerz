@@ -55,6 +55,13 @@ import kotlinx.coroutines.withContext
 private const val UPLOADCARE_PUBLIC_KEY = "a019be01bbe664bae2db"
 private const val OWNER_UID = "NdoyBz3UMcWGWQ3DhuwrIbVbZvl2"
 
+private fun displayImageUrl(value: Any?): String {
+    val url = value?.toString()?.trim().orEmpty()
+    return url.replace("https://ucarecdn.com/", "https://26vsxjozef.ucarecd.net/")
+        .replace("http://ucarecdn.com/", "https://26vsxjozef.ucarecd.net/")
+}
+
+
 private suspend fun uploadImageToUploadcare(bytes: ByteArray): Pair<String, String> = withContext(Dispatchers.IO) {
     val boundary = "----GamerzUpload" + System.currentTimeMillis()
     val connection = (URL("https://upload.uploadcare.com/base/").openConnection() as HttpURLConnection).apply {
@@ -416,7 +423,7 @@ fun GamerzApp() {
                             Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF231B32))) {
                                 Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                                     if (avatarUrl.isNotBlank()) {
-                                        AsyncImage(model = avatarUrl, contentDescription = "صورتك الشخصية", contentScale = ContentScale.Crop,
+                                        AsyncImage(model = displayImageUrl(avatarUrl), contentDescription = "صورتك الشخصية", contentScale = ContentScale.Crop,
                                             modifier = Modifier.size(78.dp).border(2.dp, Color(0xFFC77CFF), CircleShape).padding(3.dp).clip(CircleShape))
                                     } else {
                                         Icon(Icons.Default.AccountCircle, contentDescription = "صورة افتراضية", tint = Color(0xFFC79AFF), modifier = Modifier.size(78.dp))
@@ -472,7 +479,7 @@ fun GamerzApp() {
                                 items(myPosts) { post ->
                                     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF23182F))) {
                                         Column(Modifier.width(122.dp).padding(6.dp)) {
-                                            AsyncImage(model = post["imageUrl"], contentDescription = "غلاف اللعبة", contentScale = ContentScale.Crop,
+                                            AsyncImage(model = displayImageUrl(post["imageUrl"]), contentDescription = "غلاف اللعبة", contentScale = ContentScale.Crop,
                                                 modifier = Modifier.fillMaxWidth().height(105.dp).clip(RoundedCornerShape(10.dp)))
                                             Text(post["gameName"]?.toString().orEmpty(), style = MaterialTheme.typography.labelMedium,
                                                 maxLines = 1, fontWeight = FontWeight.Bold)
@@ -518,7 +525,7 @@ fun GamerzApp() {
                             results.forEach { post ->
                                 Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF22192F))) {
                                     Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة لعبة",
+                                        AsyncImage(model = displayImageUrl(post["imageUrl"]), contentDescription = "صورة لعبة",
                                             contentScale = ContentScale.Crop, modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp)))
                                         Spacer(Modifier.width(12.dp))
                                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -577,7 +584,7 @@ fun GamerzApp() {
                                     }
                                     items(stories) { story ->
                                         Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            AsyncImage(model = story["imageUrl"], contentDescription = "عرض القصة", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape).clickable { storyTarget = story })
+                                            AsyncImage(model = displayImageUrl(story["imageUrl"]), contentDescription = "عرض القصة", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape).clickable { storyTarget = story })
                                             Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب", style = MaterialTheme.typography.labelSmall)
                                             if (story["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
@@ -631,7 +638,7 @@ fun GamerzApp() {
                                                 db = db, modifier = Modifier.weight(1f))
                                             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
-                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(280.dp).background(Color(0xFF0E0B18)))
+                                        AsyncImage(model = displayImageUrl(post["imageUrl"]), contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(280.dp).background(Color(0xFF0E0B18)))
                                         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                                             Text(post["gameName"]?.toString().orEmpty(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                                             GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
@@ -767,7 +774,7 @@ fun GamerzApp() {
             title = { Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب") },
             text = {
                 AsyncImage(
-                    model = story["imageUrl"],
+                    model = displayImageUrl(story["imageUrl"]),
                     contentDescription = "قصة بملء الشاشة",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth().height(400.dp).clip(RoundedCornerShape(16.dp))
