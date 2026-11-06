@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
@@ -120,12 +121,16 @@ fun GamerzApp() {
     val currentUid = auth.currentUser?.uid.orEmpty()
     val isOwner = currentUid == OWNER_UID
 
+    var authMode by remember { mutableStateOf("login") }
     var platform by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var game by remember { mutableStateOf("") }
     var completion by remember { mutableStateOf("0") }
+    var rating by remember { mutableIntStateOf(0) }
+    var searchQuery by remember { mutableStateOf("") }
+    var storyTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
     var review by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var storyUri by remember { mutableStateOf<Uri?>(null) }
@@ -152,11 +157,12 @@ fun GamerzApp() {
             }
     }
     suspend fun refreshStories() {
-        stories = db.collection("stories").whereGreaterThan("expiresAt", Timestamp.now())
-            .orderBy("expiresAt", com.google.firebase.firestore.Query.Direction.ASCENDING)
-            .limit(50).get().await().documents.mapNotNull { doc ->
+        val now = Timestamp.now().seconds
+        stories = db.collection("stories")
+            .orderBy("expiresAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(100).get().await().documents.mapNotNull { doc ->
                 doc.data?.toMutableMap()?.apply { put("_id", doc.id) }
-            }
+            }.filter { (it["expiresAt"] as? Timestamp)?.seconds?.let { expiry -> expiry > now } == true }
     }
     suspend fun refreshReports() {
         if (!isOwner) return
@@ -199,50 +205,84 @@ fun GamerzApp() {
     )) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (!loggedIn) {
-                Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1B0731), Color(0xFF090711), Color(0xFF140920)))).padding(22.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("♛  GAMERZ", style = MaterialTheme.typography.displayLarge, color = MaterialTheme.colorScheme.primary)
-                    Text("🎮  العب • شارك • اكتشف", style = MaterialTheme.typography.titleMedium)
-                    Text("مجتمع اللاعبين", style = MaterialTheme.typography.titleMedium)
+                Column(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(Color(0xFF25103F), Color(0xFF0A0713), Color(0xFF150921)))
+                    ).verticalScroll(rememberScrollState()).padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
                     Spacer(Modifier.height(20.dp))
-                    if (platform.isBlank()) {
-                        Text("اختر منصة اللعب")
-                        listOf("PlayStation", "Xbox", "PC").forEach { value ->
-                            OutlinedButton(onClick = { platform = value }, modifier = Modifier.fillMaxWidth()) { Text(value) }
+                    Surface(shape = RoundedCornerShape(28.dp), color = Color(0xFF3B1660), shadowElevation = 12.dp) {
+                        Icon(Icons.Default.SportsEsports, contentDescription = "Gamerz", tint = Color(0xFFE5B8FF),
+                            modifier = Modifier.padding(18.dp).size(62.dp))
+                    }
+                    Text("Gamerz", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black, color = Color(0xFFEBDAFF))
+                    Text("قيمرز • مجتمع اللاعبين", color = Color(0xFFC8ADE0))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(onClick = { authMode = "login"; message = "" }, modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (authMode == "login") Color(0xFF902FD7) else Color(0xFF30203F)),
+                            shape = RoundedCornerShape(14.dp)) { Text("تسجيل الدخول") }
+                        Button(onClick = { authMode = "register"; message = "" }, modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (authMode == "register") Color(0xFF902FD7) else Color(0xFF30203F)),
+                            shape = RoundedCornerShape(14.dp)) { Text("إنشاء حساب") }
+                    }
+                    if (authMode == "register") {
+                        Text("اختر منصة اللعب الأساسية", modifier = Modifier.fillMaxWidth(),
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        listOf("PlayStation", "Xbox", "PC").forEach { choice ->
+                            OutlinedButton(onClick = { platform = choice }, modifier = Modifier.fillMaxWidth().height(51.dp),
+                                border = BorderStroke(if (platform == choice) 2.dp else 1.dp,
+                                    if (platform == choice) Color(0xFFC175FF) else Color(0xFF58426D)),
+                                shape = RoundedCornerShape(15.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(containerColor = if (platform == choice) Color(0xFF302046) else Color(0xFF171022))) {
+                                Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color(0xFFC68DFF))
+                                Spacer(Modifier.width(12.dp))
+                                Text(choice, fontWeight = FontWeight.Bold)
+                            }
                         }
-                    } else {
-                        OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب عند إنشاء حساب") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(email, { email = it }, label = { Text(stringResource(R.string.email)) }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(password, { password = it }, label = { Text(stringResource(R.string.password)) }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                        Button(enabled = !busy, onClick = {
-                            scope.launch {
-                                try {
-                                    busy = true
-                                    require(username.trim().matches(Regex("^[A-Za-z0-9_]{2,20}$"))) { "اسم اللاعب يجب أن يكون 2-20 حرفًا أو رقمًا أو _" }
-                                    val user = auth.createUserWithEmailAndPassword(email.trim(), password).await().user!!
+                        OutlinedTextField(value = username, onValueChange = { username = it.take(20) },
+                            label = { Text("اسم اللاعب (حروف وأرقام)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    }
+                    OutlinedTextField(value = email, onValueChange = { email = it.trim() },
+                        label = { Text("البريد الإلكتروني") }, leadingIcon = { Icon(Icons.Default.MailOutline, contentDescription = null) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = password, onValueChange = { password = it },
+                        label = { Text("كلمة المرور") }, leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    GamerzAccentButton(
+                        text = if (authMode == "register") "إنشاء حساب Gamerz" else "دخول إلى Gamerz",
+                        enabled = !busy
+                    ) {
+                        scope.launch {
+                            try {
+                                busy = true
+                                require(email.isNotBlank() && password.isNotBlank()) { "أدخل البريد وكلمة المرور" }
+                                if (authMode == "register") {
+                                    require(platform in listOf("PlayStation", "Xbox", "PC")) { "اختر منصة اللعب" }
+                                    require(username.trim().matches(Regex("^[A-Za-z0-9_]{2,20}$"))) {
+                                        "اسم اللاعب يجب أن يكون من 2 إلى 20 حرفًا أو رقمًا أو _"
+                                    }
+                                    val user = auth.createUserWithEmailAndPassword(email.trim(), password).await().user
+                                        ?: error("تعذّر إنشاء الحساب")
                                     db.collection("users").document(user.uid).set(mapOf(
                                         "username" to username.trim(), "platform" to platform,
                                         "createdAt" to System.currentTimeMillis()
                                     )).await()
-                                    loggedIn = true
-                                    message = "تم إنشاء الحساب"
-                                } catch (e: Exception) { message = e.localizedMessage ?: "تعذر إنشاء الحساب" }
-                                finally { busy = false }
-                            }
-                        }, modifier = Modifier.fillMaxWidth()) { Text("إنشاء حساب") }
-                        OutlinedButton(enabled = !busy, onClick = {
-                            scope.launch {
-                                try {
-                                    busy = true
+                                } else {
                                     auth.signInWithEmailAndPassword(email.trim(), password).await()
-                                    loggedIn = true
-                                    message = "تم تسجيل الدخول"
-                                } catch (e: Exception) { message = e.localizedMessage ?: "تعذر تسجيل الدخول" }
-                                finally { busy = false }
-                            }
-                        }, modifier = Modifier.fillMaxWidth()) { Text("تسجيل الدخول") }
-                        TextButton(onClick = { platform = "" }) { Text("تغيير المنصة") }
+                                }
+                                profileLoaded = false
+                                loggedIn = true
+                                message = ""
+                            } catch (e: Exception) {
+                                message = e.localizedMessage ?: "تعذر تسجيل الدخول"
+                            } finally { busy = false }
+                        }
                     }
-                    if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.secondary)
+                    if (busy) CircularProgressIndicator(modifier = Modifier.size(28.dp), color = Color(0xFFC47CFF))
+                    if (message.isNotBlank()) Text(message, color = Color(0xFFFFB0B0), style = MaterialTheme.typography.bodyMedium)
+                    Text("GAMERZ • العب، شارك، اكتشف", color = Color(0xFFAE94C5), style = MaterialTheme.typography.labelSmall)
                 }
             } else {
                 LaunchedEffect(loggedIn) {
@@ -269,35 +309,59 @@ fun GamerzApp() {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (page) {
                         "create" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("منشور جديد", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                            Text("شارك لعبتك ولحظة إنجازك مع المجتمع", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB9ADC9))
-                            OutlinedTextField(game, { game = it }, label = { Text("اسم اللعبة") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(completion, { completion = it.filter(Char::isDigit).take(3) }, label = { Text("نسبة الإنجاز 0–100") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(review, { review = it }, label = { Text("رأيك باللعبة (اختياري)") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) { Text("اختر صورة المنشور") }
-                            imageUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = null, modifier = Modifier.fillMaxWidth().height(150.dp)) }
+                            GamerzPageHeading("منشور جديد", "شارك اللعبة، تقييمك والإنجاز مع مجتمع Gamerz")
+                            Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172C))) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    if (imageUri != null) {
+                                        Image(painter = rememberAsyncImagePainter(imageUri), contentDescription = "معاينة صورة اللعبة",
+                                            modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
+                                    } else {
+                                        Column(Modifier.fillMaxWidth().height(110.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(36.dp), tint = Color(0xFFC18BFF))
+                                            Text("صورة اللعبة مطلوبة", color = Color(0xFFCCB4E7))
+                                        }
+                                    }
+                                    OutlinedButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(Icons.Default.PhotoLibrary, null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("اختيار صورة")
+                                    }
+                                }
+                            }
+                            OutlinedTextField(game, { game = it.take(80) }, label = { Text("اسم اللعبة *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E172C))) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("تقييمك للعبة *", fontWeight = FontWeight.Bold)
+                                    GamerzRatingStars(rating = rating, onRatingChange = { rating = it })
+                                    if (rating == 0) Text("اختر من 1 إلى 5 نجوم قبل النشر", color = Color(0xFFB9ADC9), style = MaterialTheme.typography.bodySmall)
+                                    OutlinedTextField(completion, { completion = it.filter(Char::isDigit).take(3) }, label = { Text("نسبة الإنجاز من 0 إلى 100% *") }, modifier = Modifier.fillMaxWidth())
+                                    GamerzCompletionBar(completion.toIntOrNull() ?: 0)
+                                }
+                            }
+                            OutlinedTextField(review, { review = it.take(500) }, label = { Text("رأيك باللعبة (اختياري)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
                             Button(enabled = !busy, onClick = {
                                 scope.launch {
                                     try {
                                         busy = true
                                         val percent = completion.toIntOrNull() ?: error("أدخل نسبة صحيحة")
-                                        require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة 0–100 مطلوبة" }
+                                        require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة الإكمال مطلوبة" }
+                                        require(rating in 1..5) { "يجب اختيار تقييم من 1 إلى 5 نجوم قبل النشر" }
                                         val bytes = readCompressedImage(context, imageUri!!)
                                         val (url, uploadPath) = uploadImageToUploadcare(bytes)
                                         db.collection("posts").add(mapOf(
                                             "uid" to currentUid, "platform" to platform,
-                                            "gameName" to game.trim(), "completion" to percent,
+                                            "gameName" to game.trim(), "completion" to percent, "rating" to rating,
                                             "imageUrl" to url, "storagePath" to uploadPath,
                                             "pros" to review.trim().take(500), "cons" to "",
                                             "platinum" to false, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                             "likes" to 0, "commentCount" to 0
                                         )).await()
-                                        game = ""; completion = "0"; review = ""; imageUri = null
+                                        game = ""; completion = "0"; rating = 0; review = ""; imageUri = null
                                         message = "تم نشر المنشور"; page = "feed"; refreshFeed()
                                     } catch (e: Exception) { message = e.localizedMessage ?: "فشل النشر" }
                                     finally { busy = false }
                                 }
-                            }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "جارٍ النشر..." else "نشر") }
+                            }, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9131D6))) { Text(if (busy) "جارٍ النشر..." else "نشر المنشور", fontWeight = FontWeight.Bold) }
                         }
                         "profile" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF231B32))) {
@@ -306,10 +370,14 @@ fun GamerzApp() {
                                     Spacer(Modifier.width(12.dp))
                                     Column {
                                         Text(username.ifBlank { "لاعب Gamerz" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                        Text(platform.ifBlank { "منصة غير محددة" }, color = Color(0xFFD8BBFF))
+                                        GamerzPlatformBadge(platform)
                                         Text(auth.currentUser?.email.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
                                     }
                                 }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(posts.count { it["uid"] == currentUid }.toString(), fontWeight = FontWeight.Bold); Text("منشورات", color = Color(0xFFB9ADC9)) }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(stories.count { it["uid"] == currentUid }.toString(), fontWeight = FontWeight.Bold); Text("قصص", color = Color(0xFFB9ADC9)) }
                             }
                             Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
@@ -324,6 +392,44 @@ fun GamerzApp() {
                                 }
                             }, modifier = Modifier.fillMaxWidth()) { Text("حفظ الملف") }
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; page = "feed" }) { Text("تسجيل الخروج") }
+                        }
+                        "search" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            GamerzPageHeading("استكشاف الألعاب", "ابحث في آخر المنشورات وأبرز إنجازات اللاعبين")
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("ابحث باسم لعبة أو منصة") },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            val results = posts.filter { post ->
+                                searchQuery.isBlank() ||
+                                    post["gameName"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
+                                    post["platform"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true)
+                            }
+                            Text(if (searchQuery.isBlank()) "أحدث الألعاب في المجتمع" else "نتائج البحث: " + results.size,
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            if (results.isEmpty()) {
+                                Text("لا توجد نتائج في المنشورات المحملة. جرب اسم لعبة آخر.",
+                                    style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB9ADC9))
+                            }
+                            results.forEach { post ->
+                                Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF22192F))) {
+                                    Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة لعبة",
+                                            contentScale = ContentScale.Crop, modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp)))
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(post["gameName"]?.toString().orEmpty(), fontWeight = FontWeight.Bold)
+                                            GamerzPlatformBadge(post["platform"]?.toString().orEmpty())
+                                            GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
+                                        }
+                                    }
+                                }
+                            }
                         }
                         "admin" -> if (isOwner) LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
                             item { Text("لوحة المالك", style = MaterialTheme.typography.headlineSmall) }
@@ -372,9 +478,9 @@ fun GamerzApp() {
                                     }
                                     items(stories) { story ->
                                         Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            AsyncImage(model = story["imageUrl"], contentDescription = "قصة لاعب", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape))
-                                            Text("قصة لاعب", style = MaterialTheme.typography.labelSmall)
-                                            if (isOwner) TextButton(onClick = {
+                                            AsyncImage(model = story["imageUrl"], contentDescription = "عرض القصة", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape).clickable { storyTarget = story })
+                                            Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب", style = MaterialTheme.typography.labelSmall)
+                                            if (story["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
                                                     try {
                                                         db.collection("stories").document(story["_id"].toString()).delete().await()
@@ -385,7 +491,7 @@ fun GamerzApp() {
                                         }
                                     }
                                 }
-                                storyUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = null, modifier = Modifier.fillMaxWidth().height(100.dp)) }
+                                storyUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = "معاينة القصة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(16.dp))) }
                                 if (storyUri != null) Button(enabled = !busy, onClick = {
                                     scope.launch {
                                         try {
@@ -398,11 +504,13 @@ fun GamerzApp() {
                                                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                                 "expiresAt" to Timestamp(now.seconds + 24 * 60 * 60, now.nanoseconds)
                                             )).await()
-                                            storyUri = null; refreshStories(); message = "تم نشر القصة لمدة 24 ساعة"
+                                            storyUri = null; message = "تم نشر القصة لمدة 24 ساعة"
+                                            try { refreshStories() } catch (_: Exception) { message = "نُشرت القصة، لكن فشل تحديث القائمة. راجع قواعد Firebase." }
                                         } catch (e: Exception) { message = e.localizedMessage ?: "فشل نشر القصة" }
                                         finally { busy = false }
                                     }
-                                }) { Text("نشر القصة") }
+                                }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.AutoStories, contentDescription = null); Spacer(Modifier.width(8.dp)); Text(if (busy) "جارٍ نشر القصة..." else "نشر القصة") }
+                                if (storyUri != null) TextButton(onClick = { storyUri = null }) { Text("إلغاء") }
                                 if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.secondary)
                                 Spacer(Modifier.height(10.dp))
                             }
@@ -429,7 +537,9 @@ fun GamerzApp() {
                                             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF39254E)) { Text("${post["completion"] ?: 0}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFE3C7FF), fontWeight = FontWeight.Bold) }
                                         }
                                         AsyncImage(model = post["imageUrl"], contentDescription = "صورة اللعبة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(280.dp).background(Color(0xFF0E0B18)))
-                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                            GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
+                                            GamerzCompletionBar((post["completion"] as? Number)?.toInt() ?: 0)
                                             if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
                                         }
                                         Row(Modifier.padding(horizontal = 8.dp)) {
@@ -453,7 +563,8 @@ fun GamerzApp() {
                     if (message.isNotBlank() && page != "feed") Text(message, modifier = Modifier.padding(8.dp), color = MaterialTheme.colorScheme.secondary)
                     NavigationBar(containerColor = Color(0xFF130F1D), tonalElevation = 8.dp, modifier = Modifier.fillMaxWidth()) {
                         NavigationBarItem(selected = page == "feed", onClick = { page = "feed" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
-                        NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null) }, label = { Text("نشر") })
+                        NavigationBarItem(selected = page == "search", onClick = { page = "search" }, icon = { Icon(Icons.Default.Search, null) }, label = { Text("استكشاف") })
+                        NavigationBarItem(selected = page == "create", onClick = { page = "create" }, icon = { Icon(Icons.Default.AddCircle, null, tint = Color(0xFFC77CFF)) }, label = { Text("نشر") })
                         NavigationBarItem(selected = page == "profile", onClick = { page = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("ملفي") })
                         if (isOwner) NavigationBarItem(selected = page == "admin", onClick = { page = "admin"; refreshAll() }, icon = { Icon(Icons.Default.Security, null) }, label = { Text("الإدارة") })
                     }
@@ -461,6 +572,42 @@ fun GamerzApp() {
                 }
             }
         }
+    }
+    storyTarget?.let { story ->
+        AlertDialog(
+            onDismissRequest = { storyTarget = null },
+            title = { Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب") },
+            text = {
+                AsyncImage(
+                    model = story["imageUrl"],
+                    contentDescription = "قصة بملء الشاشة",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().height(400.dp).clip(RoundedCornerShape(16.dp))
+                )
+            },
+            confirmButton = {
+                if (story["uid"] == currentUid || isOwner) {
+                    TextButton(enabled = !busy, onClick = {
+                        scope.launch {
+                            try {
+                                busy = true
+                                db.collection("stories").document(story["_id"].toString()).delete().await()
+                                storyTarget = null
+                                message = "تم حذف القصة"
+                                try { refreshStories() } catch (_: Exception) { }
+                            } catch (e: Exception) {
+                                message = "تعذر حذف القصة: " + (e.localizedMessage ?: "راجع صلاحيات Firebase")
+                            } finally { busy = false }
+                        }
+                    }) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("حذف القصة")
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = { storyTarget = null }) { Text("إغلاق") } }
+        )
     }
     reportTarget?.let { target ->
         AlertDialog(
