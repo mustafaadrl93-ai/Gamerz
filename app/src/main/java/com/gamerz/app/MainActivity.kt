@@ -1,6 +1,7 @@
 package com.gamerz.app
 
 import android.net.Uri
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,6 +40,7 @@ import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -123,6 +125,9 @@ fun GamerzApp() {
 
     var authMode by remember { mutableStateOf("login") }
     var platform by remember { mutableStateOf("") }
+    var avatarUrl by remember { mutableStateOf("") }
+    var showDeleteAccount by remember { mutableStateOf(false) }
+    var deletePassword by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
@@ -148,6 +153,19 @@ fun GamerzApp() {
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { imageUri = it }
     val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { storyUri = it }
+    val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null && currentUid.isNotBlank() && !busy) scope.launch {
+            try {
+                busy = true
+                val bytes = readCompressedImage(context, uri)
+                val (url, path) = uploadImageToUploadcare(bytes)
+                db.collection("users").document(currentUid).update(mapOf("avatarUrl" to url, "avatarStoragePath" to path)).await()
+                avatarUrl = url
+                message = "تم تحديث صورتك الشخصية"
+            } catch (e: Exception) { message = e.localizedMessage ?: "تعذر تغيير الصورة الشخصية" }
+            finally { busy = false }
+        }
+    }
 
     suspend fun refreshFeed() {
         posts = db.collection("posts")
@@ -291,6 +309,7 @@ fun GamerzApp() {
                             val user = db.collection("users").document(currentUid).get().await()
                             username = user.getString("username").orEmpty()
                             platform = user.getString("platform").orEmpty()
+                            avatarUrl = user.getString("avatarUrl").orEmpty()
                             profileLoaded = true
                         } catch (_: Exception) { }
                         refreshAll()
@@ -366,7 +385,12 @@ fun GamerzApp() {
                         "profile" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF231B32))) {
                                 Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.AccountCircle, contentDescription = null, tint = Color(0xFFC79AFF), modifier = Modifier.size(66.dp))
+                                    if (avatarUrl.isNotBlank()) {
+                                        AsyncImage(model = avatarUrl, contentDescription = "صورتك الشخصية", contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(78.dp).border(2.dp, Color(0xFFC77CFF), CircleShape).padding(3.dp).clip(CircleShape))
+                                    } else {
+                                        Icon(Icons.Default.AccountCircle, contentDescription = "صورة افتراضية", tint = Color(0xFFC79AFF), modifier = Modifier.size(78.dp))
+                                    }
                                     Spacer(Modifier.width(12.dp))
                                     Column {
                                         Text(username.ifBlank { "لاعب Gamerz" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -378,6 +402,11 @@ fun GamerzApp() {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(posts.count { it["uid"] == currentUid }.toString(), fontWeight = FontWeight.Bold); Text("منشورات", color = Color(0xFFB9ADC9)) }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(stories.count { it["uid"] == currentUid }.toString(), fontWeight = FontWeight.Bold); Text("قصص", color = Color(0xFFB9ADC9)) }
+                            }
+                            OutlinedButton(enabled = !busy, onClick = { avatarPicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Edit, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("تغيير الصورة الرمزية")
                             }
                             Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
@@ -391,7 +420,31 @@ fun GamerzApp() {
                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر الحفظ" }
                                 }
                             }, modifier = Modifier.fillMaxWidth()) { Text("حفظ الملف") }
-                            TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; page = "feed" }) { Text("تسجيل الخروج") }
+                            Text("معرض إنجازاتي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            val myPosts = posts.filter { it["uid"] == currentUid }
+                            if (myPosts.isEmpty()) Text("لم تنشر ألعابًا بعد", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                items(myPosts) { post ->
+                                    Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF23182F))) {
+                                        Column(Modifier.width(122.dp).padding(6.dp)) {
+                                            AsyncImage(model = post["imageUrl"], contentDescription = "غلاف اللعبة", contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxWidth().height(105.dp).clip(RoundedCornerShape(10.dp)))
+                                            Text(post["gameName"]?.toString().orEmpty(), style = MaterialTheme.typography.labelMedium,
+                                                maxLines = 1, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                            OutlinedButton(onClick = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/mustafaadrl93-ai/Gamerz/blob/main/docs/privacy-policy.md")))
+                            }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PrivacyTip, null); Spacer(Modifier.width(8.dp)); Text("مسودة سياسة الخصوصية") }
+                            OutlinedButton(onClick = { deletePassword = ""; showDeleteAccount = true }, modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFA5AD))) {
+                                Icon(Icons.Default.DeleteForever, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("حذف حسابي")
+                            }
+                            TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
                         "search" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -573,6 +626,76 @@ fun GamerzApp() {
             }
         }
     }
+    if (showDeleteAccount) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) showDeleteAccount = false },
+            title = { Text("حذف حساب Gamerz نهائيًا") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("سيتم حذف حسابك وملفك ومنشوراتك وقصصك من Firebase. لا يمكن التراجع عن هذه العملية.")
+                    Text("ملفات الصور لدى Uploadcare تحتاج إزالة منفصلة بواسطة إدارة التطبيق؛ سيتم إرسال طلب إزالتها.",
+                        style = MaterialTheme.typography.bodySmall, color = Color(0xFFFFBF95))
+                    OutlinedTextField(
+                        value = deletePassword, onValueChange = { deletePassword = it },
+                        label = { Text("أدخل كلمة المرور للتأكيد") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !busy && deletePassword.isNotBlank(), onClick = {
+                    scope.launch {
+                        try {
+                            busy = true
+                            val user = auth.currentUser ?: error("الحساب غير متوفر")
+                            val signedInEmail = user.email ?: error("بريد الحساب غير متوفر")
+                            val uid = user.uid
+                            user.reauthenticate(EmailAuthProvider.getCredential(signedInEmail, deletePassword)).await()
+                            val ownedPosts = db.collection("posts").whereEqualTo("uid", uid).get().await().documents
+                            val ownedStories = db.collection("stories").whereEqualTo("uid", uid).get().await().documents
+                            val urls = ownedPosts.mapNotNull { it.getString("imageUrl") } +
+                                ownedStories.mapNotNull { it.getString("imageUrl") } + listOf(avatarUrl)
+                            val imagePaths = urls.mapNotNull { url ->
+                                if (!url.startsWith("https://ucarecdn.com/")) null
+                                else {
+                                    val id = url.removePrefix("https://ucarecdn.com/").substringBefore("/")
+                                    if (id.matches(Regex("[a-f0-9-]{20,40}"))) "uploadcare/" + id else null
+                                }
+                            }.distinct().take(500)
+                            db.collection("deletionRequests").add(mapOf(
+                                "uid" to uid,
+                                "imagePaths" to imagePaths,
+                                "status" to "pending",
+                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            )).await()
+                            for (doc in ownedPosts) doc.reference.delete().await()
+                            for (doc in ownedStories) doc.reference.delete().await()
+                            db.collection("users").document(uid).delete().await()
+                            user.delete().await()
+                            auth.signOut()
+                            loggedIn = false
+                            profileLoaded = false
+                            avatarUrl = ""
+                            platform = ""
+                            posts = emptyList()
+                            stories = emptyList()
+                            page = "feed"
+                            showDeleteAccount = false
+                            message = "حُذف الحساب من Firebase؛ طلب إزالة الصور بانتظار المعالجة."
+                        } catch (e: Exception) {
+                            message = "تعذر إكمال حذف الحساب: " + (e.localizedMessage ?: "راجع اتصالك وقواعد Firebase")
+                        } finally {
+                            busy = false
+                            deletePassword = ""
+                        }
+                    }
+                }) { Text("تأكيد حذف الحساب", color = Color(0xFFE58D93)) }
+            },
+            dismissButton = { TextButton(enabled = !busy, onClick = { showDeleteAccount = false; deletePassword = "" }) { Text("إلغاء") } }
+        )
+    }
+
     storyTarget?.let { story ->
         AlertDialog(
             onDismissRequest = { storyTarget = null },
