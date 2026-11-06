@@ -544,26 +544,11 @@ fun GamerzApp() {
                             }, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9131D6))) { Text(if (busy) "جارٍ النشر..." else "نشر المنشور", fontWeight = FontWeight.Bold) }
                         }
                         "profile" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF231B32))) {
-                                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    if (avatarUrl.isNotBlank()) {
-                                        AsyncImage(model = displayImageUrl(avatarUrl), contentDescription = "صورتك الشخصية", contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(78.dp).border(2.dp, Color(0xFFC77CFF), CircleShape).padding(3.dp).clip(CircleShape))
-                                    } else {
-                                        Icon(Icons.Default.AccountCircle, contentDescription = "صورة افتراضية", tint = Color(0xFFC79AFF), modifier = Modifier.size(78.dp))
-                                    }
-                                    Spacer(Modifier.width(12.dp))
-                                    Column {
-                                        Text(username.ifBlank { "لاعب Gamerz" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                        GamerzPlatformBadge(platform)
-                                        Text(auth.currentUser?.email.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
-                                        Spacer(Modifier.height(7.dp))
-                                        GamerzPlatinumCounter(currentUid, db)
-                                        Spacer(Modifier.height(7.dp))
-                                        GamerzOrbitRankPill(currentUid, db)
-                                    }
-                                }
-                            }
+                            GamerzOrbitProfileHero(
+                                username = username, email = auth.currentUser?.email.orEmpty(),
+                                avatarUrl = avatarUrl, platform = platform,
+                                uid = currentUid, db = db
+                            )
                             Card(shape = RoundedCornerShape(18.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF22192F))) {
                                 Row(Modifier.fillMaxWidth().padding(vertical = 15.dp),
