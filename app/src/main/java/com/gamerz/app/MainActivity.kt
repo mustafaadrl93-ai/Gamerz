@@ -358,6 +358,44 @@ fun GamerzApp() {
                             }, modifier = Modifier.fillMaxWidth()) { Text("حفظ الملف") }
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
+                        "search" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            GamerzPageHeading("استكشاف الألعاب", "ابحث في آخر المنشورات وأبرز إنجازات اللاعبين")
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("ابحث باسم لعبة أو منصة") },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            val results = posts.filter { post ->
+                                searchQuery.isBlank() ||
+                                    post["gameName"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true) ||
+                                    post["platform"]?.toString().orEmpty().contains(searchQuery.trim(), ignoreCase = true)
+                            }
+                            Text(if (searchQuery.isBlank()) "أحدث الألعاب في المجتمع" else "نتائج البحث: " + results.size,
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            if (results.isEmpty()) {
+                                Text("لا توجد نتائج في المنشورات المحملة. جرب اسم لعبة آخر.",
+                                    style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB9ADC9))
+                            }
+                            results.forEach { post ->
+                                Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF22192F))) {
+                                    Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        AsyncImage(model = post["imageUrl"], contentDescription = "صورة لعبة",
+                                            contentScale = ContentScale.Crop, modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp)))
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(post["gameName"]?.toString().orEmpty(), fontWeight = FontWeight.Bold)
+                                            GamerzPlatformBadge(post["platform"]?.toString().orEmpty())
+                                            GamerzRatingStars(rating = (post["rating"] as? Number)?.toInt() ?: 0)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         "admin" -> if (isOwner) LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
                             item { Text("لوحة المالك", style = MaterialTheme.typography.headlineSmall) }
                             item { Text("البلاغات المفتوحة والمراجعة", style = MaterialTheme.typography.titleMedium) }
