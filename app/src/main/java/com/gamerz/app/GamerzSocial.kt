@@ -362,7 +362,8 @@ fun GamerzFollowStats(profileUid: String, db: FirebaseFirestore,
 @Composable
 fun GamerzPublicProfileSheet(
     targetUid: String, currentUid: String, db: FirebaseFirestore,
-    posts: List<Map<String, Any>>, onDismiss: () -> Unit
+    posts: List<Map<String, Any>>, onDismiss: () -> Unit,
+    onBlockChanged: () -> Unit = {}
 ) {
     var profile by remember(targetUid) { mutableStateOf<Map<String, Any>>(emptyMap()) }
     var refreshKey by remember(targetUid) { mutableIntStateOf(0) }
@@ -387,10 +388,13 @@ fun GamerzPublicProfileSheet(
             Text(name, style = MaterialTheme.typography.headlineSmall,
                 color = Color.White, fontWeight = FontWeight.ExtraBold)
             GamerzPlatformBadge(profile["platform"]?.toString().orEmpty())
+            GamerzPlatinumCounter(targetUid, db)
             GamerzFollowStats(targetUid, db, Modifier.fillMaxWidth(), refreshKey)
             GamerzFollowButton(currentUid, targetUid, db,
                 modifier = Modifier.fillMaxWidth().height(44.dp),
                 onChanged = { refreshKey++ })
+            GamerzBlockButton(currentUid, targetUid, db,
+                onChanged = onBlockChanged)
             Text("منشورات اللاعب", modifier = Modifier.fillMaxWidth(),
                 color = Color.White, fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium)
@@ -414,6 +418,12 @@ fun GamerzPublicProfileSheet(
                             Text(post["gameName"]?.toString().orEmpty(),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFFB9ADC9))
+                            if (post["platinum"] == true &&
+                                post["platform"] == "PlayStation" &&
+                                (post["completion"] as? Number)?.toInt() == 100) {
+                                Text("🏆 بلاتينيوم", color = Color(0xFFFFD078),
+                                    style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 }
