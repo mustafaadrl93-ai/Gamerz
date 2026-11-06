@@ -6,7 +6,11 @@ Native Android social app for gamers: Kotlin + Jetpack Compose, Firebase Authent
 
 - Email/password registration and login (Google Sign-In intentionally not used).
 - PlayStation, Xbox and PC onboarding and profile badges.
-- Neon dark-purple UI with a bottom navigation bar.
+- Original Gamerz Orbit UI identity with redesigned top navigation and custom bottom dock, dark ink/violet/cyan highlights, and original Compose Canvas geometric rank marks.
+- **Nine Gamerz Orbit ranks**, with 8 earnable tiers and founder-only #9 (fixed by an owner UID). An inactive player loses effective XP gradually after day three; returning players recover their underlying earned score.
+- **Daily UTC check-ins** with immutable server-validated date IDs and 13 challenge tasks for daily/weekly presence, publishing, game completion, trophies and engagement.
+- Profile displays their rank emblem; public profiles also display the rank. Rankings are cosmetic and computed from Firestore activity, not a server-authoritative leaderboard.
+- **Membership preview** shows Free/Wamda/Sadeem tiers without real prices, checkout, or activation. Read the [secure Play Billing plan](docs/GOOGLE_PLAY_SUBSCRIPTIONS.md) before enabling purchases.
 - Personal profile, avatar upload, a gallery of the player's recent posts, and a 🏆 golden trophy count shown on every player's profile.
 - PlayStation post completion at 100% asks "هل حققت البلاتينيوم؟"; the user can claim a platinum, counted once per distinct game title. The claim is self-reported and not verified by Sony.
 - Private manual game library (planned / playing / completed); private saved post bookmarks; player blocking/hiding from local feed and stories. Existing follows are removed when blocking.
@@ -33,7 +37,7 @@ On a phone:
 3. Replace the existing rules with the latest file and tap **Publish**.
 4. Test using two actual Firebase users: post, image, story, view, delete, comment, like, report and account deletion.
 
-The new rules authorize self-reported platinum claims only for PlayStation posts marked 100% completed; provide private user game library, bookmarks and block lists; and prevent new follows between users who have blocked each other. See [Gamerz 2.0 beta checklist](docs/BETA_TESTING_GAMERZ_2.md). The existing story rules authorize signed-in reads while hiding expired stories in the app and let a story's owner delete it. Story expiration does not automatically delete Uploadcare files or Firestore documents.
+The new rules enforce daily UTC check-ins with strict server timestamps and profile-owner deletion cleanup. They also authorize self-reported platinum claims only for PlayStation posts marked 100% completed; provide private user game library, bookmarks and block lists; and prevent new follows between users who have blocked each other. See the [Gamerz Orbit beta checklist](docs/GAMERZ_ORBIT_RANKS_BETA.md) and [Gamerz 2.0 checklist](docs/BETA_TESTING_GAMERZ_2.md). The existing story rules authorize signed-in reads while hiding expired stories in the app and let a story's owner delete it. Story expiration does not automatically delete Uploadcare files or Firestore documents.
 
 ## APK builds
 
@@ -52,10 +56,10 @@ Account deletion removes the user's authentication, profile, posts and stories f
 - Deploy and test the latest Firestore rules and configure App Check correctly for release.
 - Complete English/Arabic resource localization, RTL testing, accessibility and device test coverage.
 - True push notifications need FCM and trusted server-side event handling; the activity tab is **not** push. The current block list hides accounts in the client and prevents new follows, but is not a complete privacy or anti-harassment boundary. Server-side moderation, global search, stronger block enforcement and anti-spam limits remain.
-- Complete account/data/media deletion, including interactions on other users' posts, and remove orphaned uploaded files.
+- Complete and audit account/data/media deletion, including interactions on other users' posts and pending upload cleanup; account deletion now also removes daily check-ins after deleting the profile.
 - Final privacy policy and verified contact address (the current [policy](docs/privacy-policy.md) is a draft).
-- Test the Firebase and Uploadcare quotas, abuse/rate limits and account recovery.
+- Test the Firebase and Uploadcare quotas, abuse/rate limits and account recovery. Cosmetic Orbit XP still uses client queries (maximum 500 posts and 366 attendance records); protect it from manipulation before granting any valuable rewards.
 - Prepare a private signing key, release AAB, store listing and Play Console compliance review. The beta now targets Android API 36 (Google Play new-app requirement since August 2026).
 - For debug APK beta distribution, Firebase App Check uses its debug provider; if App Check enforcement is enabled, tester devices must be allowed/configured for it, or use a correctly signed Play internal-test release with Play Integrity.
-- Use the phone-friendly [beta test checklist](docs/BETA_TESTING_STORIES.md) to validate every feature before launch.
+- Use the phone-friendly [Orbit beta checklist](docs/GAMERZ_ORBIT_RANKS_BETA.md), [Gamerz 2.0 checklist](docs/BETA_TESTING_GAMERZ_2.md) and [Stories checklist](docs/BETA_TESTING_STORIES.md) before launch.
 
