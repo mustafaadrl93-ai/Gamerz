@@ -665,13 +665,13 @@ fun GamerzApp() {
                             }
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; selectedPlatforms = emptySet(); avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
-                        "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db)
+                        "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db, blockedUsers = blockedUsers)
                         "achievements" -> Column(Modifier.fillMaxSize()
                             .verticalScroll(rememberScrollState()).padding(16.dp)) {
                             GamerzAchievementsPanel(currentUid, db)
                         }
                         "library" -> GamerzLibraryScreen(currentUid, db)
-                        "saved" -> GamerzSavedScreen(currentUid, db) { playerUid ->
+                        "saved" -> GamerzSavedScreen(currentUid, db, blockedUsers) { playerUid ->
                             if (playerUid != currentUid) viewedProfileUid = playerUid
                             else page = "profile"
                         }
