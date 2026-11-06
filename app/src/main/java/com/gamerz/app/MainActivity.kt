@@ -726,7 +726,8 @@ fun GamerzApp() {
                                         color = Color(0xFFB8A7CA))
                                 }
                                 playerResults.filter {
-                                    it["_uid"]?.toString() != currentUid
+                                    it["_uid"]?.toString() != currentUid &&
+                                        it["_uid"]?.toString().orEmpty() !in blockedUsers
                                 }.forEach { player ->
                                     val userId = player["_uid"]?.toString().orEmpty()
                                     Surface(
@@ -922,7 +923,9 @@ fun GamerzApp() {
                                             style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
-                                val featuredStories = stories.groupBy {
+                                val featuredStories = stories.filter {
+                                    it["uid"]?.toString().orEmpty() !in blockedUsers
+                                }.groupBy {
                                     it["uid"]?.toString().orEmpty()
                                 }.values.mapNotNull { accountStories ->
                                     accountStories.maxByOrNull {
@@ -1290,6 +1293,18 @@ fun GamerzApp() {
                                 doc.reference.delete().await()
                             }
                             for (doc in ownedStories) doc.reference.delete().await()
+                            // Remove private library, bookmarks and block-list records.
+                            for (name in listOf("library")) {
+                                val docs = db.collection("users").document(uid)
+                                    .collection(name).get().await().documents
+                                for (item in docs) item.reference.delete().await()
+                            }
+                            for (collection in listOf("savedPosts", "blocks")) {
+                                val nested = if (collection == "savedPosts") "items" else "users"
+                                val docs = db.collection(collection).document(uid)
+                                    .collection(nested).get().await().documents
+                                for (item in docs) item.reference.delete().await()
+                            }
                             // Clean both sides of follow relationships before deleting the profile.
                             for (field in listOf("followerUid", "targetUid")) {
                                 val links = db.collection("follows").whereEqualTo(field, uid).get().await()
@@ -1304,6 +1319,8 @@ fun GamerzApp() {
                             platform = ""
                             posts = emptyList()
                             stories = emptyList()
+                            blockedUsers = emptySet()
+                            followedUsers = emptySet()
                             page = "feed"
                             showDeleteAccount = false
                             message = "حُذف الحساب من Firebase؛ طلب إزالة الصور بانتظار المعالجة."
@@ -1333,13 +1350,17 @@ fun GamerzApp() {
             targetUid = targetUid, currentUid = currentUid,
             db = db, posts = posts, onDismiss = { viewedProfileUid = null },
             onBlockChanged = {
-                scope.launch { refreshBlocks() }
+                viewedProfileUid = null
+                scope.launch {
+                    refreshBlocks()
+                    refreshFollowing()
+                }
             }
         )
     }
     storyTarget?.let { selected ->
         GamerzStoryViewer(
-            stories = stories,
+            stories = stories.filter { it["uid"]?.toString().orEmpty() !in blockedUsers },
             startStoryId = selected["_id"]?.toString().orEmpty(),
             currentUid = currentUid,
             isOwner = isOwner,
