@@ -112,8 +112,11 @@ fun GamerzStoryViewer(
     }
     if (ordered.isEmpty()) return
     val initialIndex = remember(startStoryId, ordered) {
-        ordered.indexOfFirst { it["_id"]?.toString() == startStoryId }
-            .coerceAtLeast(0)
+        val requestedOwner = ordered.firstOrNull {
+            it["_id"]?.toString() == startStoryId
+        }?.get("uid")
+        if (requestedOwner == null) 0
+        else ordered.indexOfFirst { it["uid"] == requestedOwner }.coerceAtLeast(0)
     }
     var index by remember(startStoryId) { mutableIntStateOf(initialIndex) }
     val safeIndex = index.coerceIn(0, ordered.lastIndex)
