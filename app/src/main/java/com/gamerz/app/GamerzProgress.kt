@@ -199,7 +199,7 @@ private fun GamerzChallenge(emoji: String, title: String, current: Int, target: 
                 Spacer(Modifier.width(9.dp))
                 Text(title, modifier = Modifier.weight(1f), color = Color.White,
                     fontWeight = FontWeight.SemiBold)
-                Text(if (current >= target) "✓ مكتمل" else "0 / $target",
+                Text(if (current >= target) "✓ مكتمل" else current.toString() + " / " + target,
                     color = if (current >= target) gamerzGold else Color(0xFFCAAFDF),
                     style = MaterialTheme.typography.labelMedium)
             }
@@ -343,12 +343,25 @@ fun GamerzBlockButton(
             scope.launch {
                 try {
                     busy = true
-                    if (blocked) doc.delete().await()
-                    else doc.set(mapOf(
-                        "ownerUid" to uid, "blockedUid" to targetUid,
-                        "createdAt" to FieldValue.serverTimestamp()
-                    )).await()
-                    blocked = !blocked
+                    if (blocked) {
+                        doc.delete().await()
+                        blocked = false
+                    } else {
+                        doc.set(mapOf(
+                            "ownerUid" to uid, "blockedUid" to targetUid,
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )).await()
+                        blocked = true
+                        // Remove both existing follow links once the block is saved.
+                        try {
+                            for (followId in listOf(
+                                uid + "_" + targetUid, targetUid + "_" + uid
+                            )) {
+                                val link = db.collection("follows").document(followId)
+                                if (link.get().await().exists()) link.delete().await()
+                            }
+                        } catch (_: Exception) { }
+                    }
                     onChanged()
                 } catch (_: Exception) { }
                 finally { busy = false }
