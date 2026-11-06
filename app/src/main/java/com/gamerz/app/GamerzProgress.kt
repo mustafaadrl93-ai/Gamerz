@@ -455,6 +455,40 @@ fun GamerzLibraryScreen(uid: String, db: FirebaseFirestore) {
                             }, color = Color(0xFFCDB8DC),
                             style = MaterialTheme.typography.labelSmall)
                     }
+                    var statusMenu by remember(game["_id"]) { mutableStateOf(false) }
+                    Box {
+                        TextButton(onClick = { statusMenu = true }) {
+                            Icon(Icons.Default.Edit, "تغيير حالة اللعبة",
+                                modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(3.dp))
+                            Text("الحالة")
+                        }
+                        DropdownMenu(expanded = statusMenu,
+                            onDismissRequest = { statusMenu = false }) {
+                            listOf(
+                                "backlog" to "لاحقًا", "playing" to "ألعبها",
+                                "completed" to "أنهيتها"
+                            ).forEach { (newStatus, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        statusMenu = false
+                                        scope.launch {
+                                            try {
+                                                db.collection("users").document(uid)
+                                                    .collection("library")
+                                                    .document(game["_id"].toString())
+                                                    .update("status", newStatus).await()
+                                                revision++
+                                            } catch (e: Exception) {
+                                                message = e.localizedMessage ?: "فشل تحديث الحالة"
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
                     IconButton(onClick = {
                         scope.launch {
                             try {
