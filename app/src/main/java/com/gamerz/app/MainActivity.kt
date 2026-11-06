@@ -646,51 +646,170 @@ fun GamerzApp() {
                         else -> PullToRefreshBox(isRefreshing = refreshing, onRefresh = { pullToRefresh() }, modifier = Modifier.fillMaxSize()) {
                             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             item {
-                                Text("لحظات اللاعبين", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFFEAD9FF))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Column {
+                                        Text("لحظات اللاعبين", style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.ExtraBold, color = Color(0xFFF0DDFF))
+                                        Text("قصص يومية • صور تختفي بعد 24 ساعة",
+                                            color = Color(0xFFBCA7CE),
+                                            style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF322247)) {
+                                        Text("LIVE", color = Color(0xFFDFA7FF),
+                                            fontWeight = FontWeight.Black,
+                                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                                            style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                                val featuredStories = stories.groupBy {
+                                    it["uid"]?.toString().orEmpty()
+                                }.values.mapNotNull { accountStories ->
+                                    accountStories.maxByOrNull {
+                                        (it["createdAt"] as? Timestamp)?.seconds ?: 0L
+                                    }
+                                }
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                    modifier = Modifier.fillMaxWidth()) {
                                     item {
-                                        Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            OutlinedButton(onClick = { storyPicker.launch("image/*") }, modifier = Modifier.size(76.dp), contentPadding = PaddingValues(0.dp), shape = CircleShape) { Icon(Icons.Default.Add, contentDescription = "إضافة قصة") }
-                                            Text("قصتك", style = MaterialTheme.typography.labelSmall)
+                                        Column(Modifier.width(87.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = Color(0xFF352149),
+                                                modifier = Modifier.size(78.dp)
+                                                    .border(2.dp, Color(0xFFB77AFF), CircleShape)
+                                                    .clickable { if (!busy) storyPicker.launch("image/*") }
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(Icons.Default.Add, contentDescription = "أضف صور قصتك",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(30.dp))
+                                                }
+                                            }
+                                            Text("قصتك +", color = Color(0xFFE9CFFF),
+                                                style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
-                                    items(stories) { story ->
-                                        Column(Modifier.width(94.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            AsyncImage(model = displayImageUrl(story["imageUrl"]), contentDescription = "عرض القصة", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).border(2.dp, Color(0xFFB878FF), CircleShape).padding(3.dp).clip(CircleShape).clickable { storyTarget = story })
-                                            Text(if (story["uid"] == currentUid) "قصتك" else "قصة لاعب", style = MaterialTheme.typography.labelSmall)
-                                            if (story["uid"] == currentUid || isOwner) TextButton(onClick = {
-                                                scope.launch {
-                                                    try {
-                                                        db.collection("stories").document(story["_id"].toString()).delete().await()
-                                                        stories = stories.filterNot { it["_id"] == story["_id"] }; message = "تم حذف القصة"
-                                                    } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف القصة" }
+                                    items(featuredStories) { story ->
+                                        val number = stories.count { it["uid"] == story["uid"] }
+                                        GamerzStoryBubble(
+                                            story = story, storyCount = number,
+                                            db = db, currentUid = currentUid,
+                                            onClick = { storyTarget = story }
+                                        )
+                                    }
+                                }
+                                if (storyUris.isNotEmpty()) {
+                                    Card(
+                                        shape = RoundedCornerShape(22.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF261B35)),
+                                        border = BorderStroke(1.dp, Color(0xFF553476))
+                                    ) {
+                                        Column(Modifier.fillMaxWidth().padding(14.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Text("قصتك الجديدة", fontWeight = FontWeight.ExtraBold,
+                                                style = MaterialTheme.typography.titleMedium)
+                                            Text("اخترت " + storyUris.size + " صور • حد أقصى 10 صور في كل دفعة",
+                                                color = Color(0xFFC9B2DC),
+                                                style = MaterialTheme.typography.bodySmall)
+                                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                items(storyUris) { uri ->
+                                                    Image(painter = rememberAsyncImagePainter(uri),
+                                                        contentDescription = "معاينة صورة القصة",
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.size(90.dp)
+                                                            .clip(RoundedCornerShape(12.dp)))
                                                 }
-                                            }) { Text("حذف") }
+                                            }
+                                            OutlinedTextField(
+                                                value = storyCaption,
+                                                onValueChange = { storyCaption = it.take(180) },
+                                                label = { Text("وصف بسيط للقصص (اختياري)") },
+                                                maxLines = 2, modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(14.dp)
+                                            )
+                                            if (busy) Text("جارٍ رفع الصورة " + (storyUploadCount + 1),
+                                                color = Color(0xFFE7C7FF))
+                                            Button(
+                                                enabled = !busy && storyUris.isNotEmpty(),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(14.dp),
+                                                onClick = {
+                                                    scope.launch {
+                                                        val queue = storyUris
+                                                        var published = 0
+                                                        try {
+                                                            busy = true
+                                                            storyUploadCount = 0
+                                                            for (uri in queue) {
+                                                                val bytes = readCompressedImage(context, uri)
+                                                                val (url, _) = uploadImageToUploadcare(bytes)
+                                                                val now = Timestamp.now()
+                                                                db.collection("stories").add(mapOf(
+                                                                    "uid" to currentUid,
+                                                                    "imageUrl" to url,
+                                                                    "caption" to storyCaption.trim(),
+                                                                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                                    "expiresAt" to Timestamp(now.seconds + 24 * 60 * 60, now.nanoseconds)
+                                                                )).await()
+                                                                published++
+                                                                storyUploadCount = published
+                                                                storyUris = queue.drop(published)
+                                                            }
+                                                            storyCaption = ""
+                                                            message = "تم نشر " + published + " قصص لمدة 24 ساعة"
+                                                            refreshStories()
+                                                        } catch (e: Exception) {
+                                                            message = "نُشرت " + published +
+                                                                " صور. تعذر إكمال الباقي: " +
+                                                                (e.localizedMessage ?: "تحقق من اتصالك")
+                                                            try { refreshStories() } catch (_: Exception) { }
+                                                        } finally {
+                                                            busy = false
+                                                            storyUploadCount = 0
+                                                        }
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.AutoStories, contentDescription = null)
+                                                Spacer(Modifier.width(7.dp))
+                                                Text("نشر " + storyUris.size + " صور في قصتي")
+                                            }
+                                            TextButton(enabled = !busy, onClick = {
+                                                storyUris = emptyList()
+                                                storyCaption = ""
+                                            }) { Text("إلغاء الاختيار") }
                                         }
                                     }
                                 }
-                                storyUri?.let { Image(painter = rememberAsyncImagePainter(it), contentDescription = "معاينة القصة", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(16.dp))) }
-                                if (storyUri != null) Button(enabled = !busy, onClick = {
-                                    scope.launch {
-                                        try {
-                                            busy = true
-                                            val bytes = readCompressedImage(context, storyUri!!)
-                                            val (url, _) = uploadImageToUploadcare(bytes)
-                                            val now = Timestamp.now()
-                                            db.collection("stories").add(mapOf(
-                                                "uid" to currentUid, "imageUrl" to url, "caption" to "",
-                                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                                                "expiresAt" to Timestamp(now.seconds + 24 * 60 * 60, now.nanoseconds)
-                                            )).await()
-                                            storyUri = null; message = "تم نشر القصة لمدة 24 ساعة"
-                                            try { refreshStories() } catch (_: Exception) { message = "نُشرت القصة، لكن فشل تحديث القائمة. راجع قواعد Firebase." }
-                                        } catch (e: Exception) { message = e.localizedMessage ?: "فشل نشر القصة" }
-                                        finally { busy = false }
-                                    }
-                                }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.AutoStories, contentDescription = null); Spacer(Modifier.width(8.dp)); Text(if (busy) "جارٍ نشر القصة..." else "نشر القصة") }
-                                if (storyUri != null) TextButton(onClick = { storyUri = null }) { Text("إلغاء") }
-                                if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.secondary)
-                                Spacer(Modifier.height(10.dp))
+                                Row(Modifier.fillMaxWidth().padding(top = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(
+                                        selected = feedMode == "forYou",
+                                        onClick = { feedMode = "forYou" },
+                                        label = { Text("اكتشف") },
+                                        leadingIcon = { Icon(Icons.Default.Explore, null) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    FilterChip(
+                                        selected = feedMode == "following",
+                                        onClick = { feedMode = "following"; scope.launch { refreshFollowing() } },
+                                        label = { Text("أتابعهم") },
+                                        leadingIcon = { Icon(Icons.Default.Groups, null) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                if (feedMode == "following" && followedUsers.isEmpty()) {
+                                    Text("تابع لاعبين لتشاهد منشوراتهم هنا",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFFCCB3D9))
+                                }
+                                if (message.isNotBlank()) Text(message,
+                                    color = MaterialTheme.colorScheme.secondary)
                             }
                             if (posts.isEmpty() && !busy && !refreshing) item {
                                 Card(Modifier.fillMaxWidth().padding(vertical = 12.dp), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF21182E))) {
