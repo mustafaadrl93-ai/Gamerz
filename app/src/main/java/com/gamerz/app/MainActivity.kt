@@ -93,15 +93,39 @@ private suspend fun uploadImageToUploadcare(bytes: ByteArray): Pair<String, Stri
 }
 
 private fun readCompressedImage(context: android.content.Context, uri: Uri): ByteArray {
-    val input = context.contentResolver.openInputStream(uri) ?: error("Cannot open image")
-    val bitmap = input.use { android.graphics.BitmapFactory.decodeStream(it) } ?: error("Invalid image")
-    require(bitmap.width.toLong() * bitmap.height.toLong() <= 30_000_000L) { "الصورة كبيرة جدًا، اختر صورة أصغر" }
+    val resolver = context.contentResolver
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use {
+        android.graphics.BitmapFactory.decodeStream(it, null, bounds)
+    } ?: error("تعذر قراءة الصورة")
+    require(bounds.outWidth > 0 && bounds.outHeight > 0) { "ملف الصورة غير صالح" }
+
+    // Decode a reduced bitmap before allocating memory: modern camera photos
+    // may exceed 30 megapixels, which previously caused upload crashes.
+    var sample = 1
+    while (maxOf(bounds.outWidth / sample, bounds.outHeight / sample) > 2000) sample *= 2
+    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+    val bitmap = resolver.openInputStream(uri)?.use {
+        android.graphics.BitmapFactory.decodeStream(it, null, options)
+    } ?: error("تعذر فتح الصورة")
+    val scale = minOf(1f, 1600f / bitmap.width, 1600f / bitmap.height)
+    val resized = if (scale < 1f) {
+        android.graphics.Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1),
+            true
+        )
+    } else bitmap
     return try {
         ByteArrayOutputStream().use { output ->
-            check(bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, output)) { "فشل ضغط الصورة" }
-            output.toByteArray()
+            check(resized.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, output)) { "فشل ضغط الصورة" }
+            val bytes = output.toByteArray()
+            require(bytes.size <= 8 * 1024 * 1024) { "الصورة كبيرة جدًا بعد الضغط" }
+            bytes
         }
     } finally {
+        if (resized !== bitmap) resized.recycle()
         bitmap.recycle()
     }
 }
