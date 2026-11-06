@@ -1,6 +1,7 @@
 package com.gamerz.app
 
 import android.net.Uri
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,6 +40,7 @@ import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -124,6 +126,8 @@ fun GamerzApp() {
     var authMode by remember { mutableStateOf("login") }
     var platform by remember { mutableStateOf("") }
     var avatarUrl by remember { mutableStateOf("") }
+    var showDeleteAccount by remember { mutableStateOf(false) }
+    var deletePassword by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
@@ -430,6 +434,15 @@ fun GamerzApp() {
                                         }
                                     }
                                 }
+                            }
+                            OutlinedButton(onClick = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/mustafaadrl93-ai/Gamerz/blob/main/docs/privacy-policy.md")))
+                            }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PrivacyTip, null); Spacer(Modifier.width(8.dp)); Text("مسودة سياسة الخصوصية") }
+                            OutlinedButton(onClick = { deletePassword = ""; showDeleteAccount = true }, modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFA5AD))) {
+                                Icon(Icons.Default.DeleteForever, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("حذف حسابي")
                             }
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
