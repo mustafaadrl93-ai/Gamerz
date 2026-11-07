@@ -183,8 +183,10 @@ service cloud.firestore {
         && request.resource.data.storagePath is string
         && request.resource.data.storagePath.matches('^uploadcare/[a-f0-9-]{20,40}$')
         && request.resource.data.pros is string
+        && request.resource.data.pros.size() >= 5
         && request.resource.data.pros.size() <= 500
         && request.resource.data.cons is string
+        && request.resource.data.cons.size() >= 5
         && request.resource.data.cons.size() <= 500
         && request.resource.data.platinum is bool
         && (
