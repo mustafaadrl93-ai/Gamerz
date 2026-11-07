@@ -701,7 +701,7 @@ fun GamerzApp() {
                         "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db, blockedUsers = blockedUsers)
                         "achievements" -> GamerzOrbitRankHub(currentUid, db, onOpenPost = { post -> selectedPost = post; page = "post_detail" })
                         "post_detail" -> GamerzPostDetail(selectedPost, onBack = { page = "profile" })
-                        "membership" -> GamerzMembershipPreview(onBack = { page = "profile" })
+                        "membership" -> GamerzMembershipPreview(onBack = { page = "profile" }, uid = currentUid)
                         "change_password" -> GamerzChangePasswordScreen(onBack = { page = "profile" })
                         "library" -> GamerzLibraryScreen(currentUid, db)
                         "saved" -> GamerzSavedScreen(currentUid, db, blockedUsers) { playerUid ->
