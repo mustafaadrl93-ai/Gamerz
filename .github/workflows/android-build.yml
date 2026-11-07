@@ -8,7 +8,7 @@ on:
     branches: [ main, completion/gamerz-social-features, free-tier/firestore-client-backend ]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -34,6 +34,11 @@ jobs:
           path: ~/.android/debug.keystore
           key: gamerz-debug-signing-v1
 
+      - name: Validate backend JavaScript syntax
+        run: |
+          node --check netlify/functions/delete-media.mjs
+          node --check netlify/functions/verify-subscription.mjs
+
       - name: Build debug APK
         run: gradle assembleDebug
 
@@ -47,16 +52,26 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
+  publish-test-release:
+    name: Publish test APK to GitHub Releases
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: Gamerz-debug-apk
+
       - name: Publish direct APK download
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-        continue-on-error: true
+          GH_REPO: ${{ github.repository }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Gamerz-debug.apk
+          mv app-debug.apk Gamerz-debug.apk
           gh release create "debug-build-${GITHUB_RUN_NUMBER}" \
             Gamerz-debug.apk \
             --title "Gamerz test build ${GITHUB_RUN_NUMBER}" \
             --notes "Debug test build only. Not for Google Play distribution." \
             --latest
-
