@@ -1,0 +1,22 @@
+# Personal machine and Android build files
+.gradle/
+build/
+app/build/
+.idea/
+*.iml
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+*.p12
+
+# Keep Firebase Admin credentials and secrets private; never commit them.
+*service-account*.json
+*service_account*.json
+*firebase-admin*.json
+.env
+.env.*
+*.pem
+*.key
+!app/google-services.json
