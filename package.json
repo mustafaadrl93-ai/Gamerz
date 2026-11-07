@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "Server-only dependencies for Gamerz Netlify Functions",
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}
