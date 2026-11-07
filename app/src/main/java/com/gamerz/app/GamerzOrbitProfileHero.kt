@@ -25,7 +25,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 @Composable
 fun GamerzOrbitProfileHero(
     username: String, email: String, avatarUrl: String,
-    platform: String, uid: String, db: FirebaseFirestore
+    platform: String, uid: String, db: FirebaseFirestore,
+    favoriteSeriesName: String = "", favoriteSeriesImageUrl: String = "",
+    favoriteGameName: String = "", favoriteGameImageUrl: String = ""
 ) {
     Surface(
         shape = RoundedCornerShape(28.dp),
@@ -88,6 +90,15 @@ fun GamerzOrbitProfileHero(
                 GamerzOrbitRankPill(uid, db)
                 GamerzPlatinumCounter(uid, db)
             }
+            HorizontalDivider(color = Color(0xFF3E3052))
+            GamerzFavoriteBadges(
+                seriesName = favoriteSeriesName,
+                seriesImageUrl = favoriteSeriesImageUrl,
+                gameName = favoriteGameName,
+                gameImageUrl = favoriteGameImageUrl,
+                showEmpty = true,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

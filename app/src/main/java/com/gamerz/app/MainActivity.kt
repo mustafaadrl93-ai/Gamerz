@@ -158,6 +158,14 @@ fun GamerzApp() {
     var platform by remember { mutableStateOf("") }
     var selectedPlatforms by remember { mutableStateOf(setOf<String>()) }
     var avatarUrl by remember { mutableStateOf("") }
+    var favoriteSeriesName by remember { mutableStateOf("") }
+    var favoriteGameName by remember { mutableStateOf("") }
+    var favoriteSeriesImageUrl by remember { mutableStateOf("") }
+    var favoriteGameImageUrl by remember { mutableStateOf("") }
+    var favoriteSeriesStoragePath by remember { mutableStateOf("") }
+    var favoriteGameStoragePath by remember { mutableStateOf("") }
+    var favoriteSeriesUri by remember { mutableStateOf<Uri?>(null) }
+    var favoriteGameUri by remember { mutableStateOf<Uri?>(null) }
     var showDeleteAccount by remember { mutableStateOf(false) }
     var deletePassword by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -204,6 +212,12 @@ fun GamerzApp() {
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { imageUri = it }
     val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         storyUris = uris.take(10)
+    }
+    val favoriteSeriesPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) favoriteSeriesUri = uri
+    }
+    val favoriteGamePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) favoriteGameUri = uri
     }
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null && currentUid.isNotBlank() && !busy) scope.launch {
@@ -422,6 +436,14 @@ fun GamerzApp() {
                             platform = selectedPlatforms.firstOrNull().orEmpty()
                             postPlatform = platform
                             avatarUrl = user.getString("avatarUrl").orEmpty()
+                            favoriteSeriesName = user.getString("favoriteSeriesName").orEmpty()
+                            favoriteGameName = user.getString("favoriteGameName").orEmpty()
+                            favoriteSeriesImageUrl = user.getString("favoriteSeriesImageUrl").orEmpty()
+                            favoriteGameImageUrl = user.getString("favoriteGameImageUrl").orEmpty()
+                            favoriteSeriesStoragePath = user.getString("favoriteSeriesStoragePath").orEmpty()
+                            favoriteGameStoragePath = user.getString("favoriteGameStoragePath").orEmpty()
+                            favoriteSeriesUri = null
+                            favoriteGameUri = null
                             profileLoaded = true
                         } catch (_: Exception) { }
                         refreshAll()
@@ -561,7 +583,11 @@ fun GamerzApp() {
                             GamerzOrbitProfileHero(
                                 username = username, email = auth.currentUser?.email.orEmpty(),
                                 avatarUrl = avatarUrl, platform = platform,
-                                uid = currentUid, db = db
+                                uid = currentUid, db = db,
+                                favoriteSeriesName = favoriteSeriesName,
+                                favoriteSeriesImageUrl = favoriteSeriesUri?.toString() ?: favoriteSeriesImageUrl,
+                                favoriteGameName = favoriteGameName,
+                                favoriteGameImageUrl = favoriteGameUri?.toString() ?: favoriteGameImageUrl
                             )
                             Card(shape = RoundedCornerShape(18.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF22192F))) {
@@ -636,6 +662,27 @@ fun GamerzApp() {
                                 Text("🔐 تغيير كلمة المرور", fontWeight = FontWeight.Bold,
                                     color = Color(0xFFE9D8FF))
                             }
+                            GamerzFavoriteEditor(
+                                seriesName = favoriteSeriesName,
+                                onSeriesNameChange = { favoriteSeriesName = it },
+                                seriesHasPhoto = favoriteSeriesUri != null || favoriteSeriesImageUrl.isNotBlank(),
+                                onPickSeries = { favoriteSeriesPicker.launch("image/*") },
+                                onClearSeries = {
+                                    favoriteSeriesImageUrl = ""
+                                    favoriteSeriesStoragePath = ""
+                                    favoriteSeriesUri = null
+                                },
+                                gameName = favoriteGameName,
+                                onGameNameChange = { favoriteGameName = it },
+                                gameHasPhoto = favoriteGameUri != null || favoriteGameImageUrl.isNotBlank(),
+                                onPickGame = { favoriteGamePicker.launch("image/*") },
+                                onClearGame = {
+                                    favoriteGameImageUrl = ""
+                                    favoriteGameStoragePath = ""
+                                    favoriteGameUri = null
+                                },
+                                busy = busy
+                            )
                             Text("تعديل الملف الشخصي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             OutlinedTextField(username, { username = it }, label = { Text("اسم اللاعب") }, modifier = Modifier.fillMaxWidth())
                             Text("منصات اللعب (اختر واحدة أو أكثر)")
@@ -644,20 +691,61 @@ fun GamerzApp() {
                                     Text((if (choice in selectedPlatforms) "✓ " else "") + choice)
                                 }
                             }
-                            Button(onClick = {
+                            Button(enabled = !busy, onClick = {
                                 scope.launch {
                                     try {
+                                        busy = true
                                         require(selectedPlatforms.isNotEmpty()) { "اختر منصة واحدة على الأقل" }
                                         require(username.trim().matches(Regex("^[A-Za-z0-9_]{2,20}$"))) { "اسم اللاعب غير صالح" }
+                                        require(favoriteSeriesName.isNotBlank() ||
+                                            (favoriteSeriesUri == null && favoriteSeriesImageUrl.isBlank())) {
+                                            "اكتب اسم السلسلة قبل اختيار صورتها"
+                                        }
+                                        require(favoriteGameName.isNotBlank() ||
+                                            (favoriteGameUri == null && favoriteGameImageUrl.isBlank())) {
+                                            "اكتب اسم اللعبة قبل اختيار صورتها"
+                                        }
+                                        var seriesUrl = favoriteSeriesImageUrl
+                                        var seriesPath = favoriteSeriesStoragePath
+                                        var gameUrl = favoriteGameImageUrl
+                                        var gamePath = favoriteGameStoragePath
+                                        favoriteSeriesUri?.let { uri ->
+                                            val uploaded = uploadImageToUploadcare(readCompressedImage(context, uri))
+                                            seriesUrl = uploaded.first
+                                            seriesPath = uploaded.second
+                                        }
+                                        favoriteGameUri?.let { uri ->
+                                            val uploaded = uploadImageToUploadcare(readCompressedImage(context, uri))
+                                            gameUrl = uploaded.first
+                                            gamePath = uploaded.second
+                                        }
                                         val profileRef = db.collection("users").document(currentUid)
-                                        val profileData = mapOf("username" to username.trim(), "platform" to selectedPlatforms.first(), "platforms" to selectedPlatforms.sorted())
+                                        val profileData = mapOf(
+                                            "username" to username.trim(),
+                                            "platform" to selectedPlatforms.first(),
+                                            "platforms" to selectedPlatforms.sorted(),
+                                            "favoriteSeriesName" to favoriteSeriesName.trim(),
+                                            "favoriteSeriesImageUrl" to seriesUrl,
+                                            "favoriteSeriesStoragePath" to seriesPath,
+                                            "favoriteGameName" to favoriteGameName.trim(),
+                                            "favoriteGameImageUrl" to gameUrl,
+                                            "favoriteGameStoragePath" to gamePath
+                                        )
                                         if (profileRef.get().await().exists()) profileRef.update(profileData).await()
                                         else profileRef.set(profileData + ("createdAt" to System.currentTimeMillis())).await()
+                                        favoriteSeriesImageUrl = seriesUrl
+                                        favoriteSeriesStoragePath = seriesPath
+                                        favoriteGameImageUrl = gameUrl
+                                        favoriteGameStoragePath = gamePath
+                                        favoriteSeriesUri = null
+                                        favoriteGameUri = null
                                         platform = selectedPlatforms.first()
-                                        message = "تم حفظ اسم اللاعب"
-                                    } catch (e: Exception) { message = e.localizedMessage ?: "تعذر الحفظ" }
+                                        message = "تم حفظ الملف واختياراتك المفضلة"
+                                    } catch (e: Exception) {
+                                        message = e.localizedMessage ?: "تعذر حفظ الملف"
+                                    } finally { busy = false }
                                 }
-                            }, modifier = Modifier.fillMaxWidth()) { Text("حفظ الملف") }
+                            }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "جارٍ الحفظ..." else "حفظ الملف واختياراتي") }
                             Text("معرض إنجازاتي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             val myPosts = posts.filter { it["uid"] == currentUid }
                             if (myPosts.isEmpty()) Text("لم تنشر ألعابًا بعد", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
@@ -1293,7 +1381,8 @@ fun GamerzApp() {
                             val ownedPosts = db.collection("posts").whereEqualTo("uid", uid).get().await().documents
                             val ownedStories = db.collection("stories").whereEqualTo("uid", uid).get().await().documents
                             val urls = ownedPosts.mapNotNull { it.getString("imageUrl") } +
-                                ownedStories.mapNotNull { it.getString("imageUrl") } + listOf(avatarUrl)
+                                ownedStories.mapNotNull { it.getString("imageUrl") } +
+                                listOf(avatarUrl, favoriteSeriesImageUrl, favoriteGameImageUrl)
                             val imagePaths = urls.mapNotNull { url ->
                                 if (!displayImageUrl(url).startsWith("https://26vsxjozef.ucarecd.net/")) null
                                 else {

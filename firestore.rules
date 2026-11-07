@@ -27,11 +27,38 @@ service cloud.firestore {
       );
     }
 
+    // Each optional favorite is controlled only by its profile owner.
+    // Blanks are accepted so users can clear a favorite without selecting one.
+    function validFavorites(data) {
+      return
+        (!('favoriteSeriesName' in data) ||
+          (data.favoriteSeriesName is string && data.favoriteSeriesName.size() <= 80)) &&
+        (!('favoriteGameName' in data) ||
+          (data.favoriteGameName is string && data.favoriteGameName.size() <= 80)) &&
+        (!('favoriteSeriesImageUrl' in data) ||
+          (data.favoriteSeriesImageUrl is string &&
+            (data.favoriteSeriesImageUrl == '' || validImage(data.favoriteSeriesImageUrl)))) &&
+        (!('favoriteGameImageUrl' in data) ||
+          (data.favoriteGameImageUrl is string &&
+            (data.favoriteGameImageUrl == '' || validImage(data.favoriteGameImageUrl)))) &&
+        (!('favoriteSeriesStoragePath' in data) ||
+          (data.favoriteSeriesStoragePath is string &&
+            (data.favoriteSeriesStoragePath == '' ||
+              data.favoriteSeriesStoragePath.matches('^uploadcare/[a-f0-9-]{20,40}$')))) &&
+        (!('favoriteGameStoragePath' in data) ||
+          (data.favoriteGameStoragePath is string &&
+            (data.favoriteGameStoragePath == '' ||
+              data.favoriteGameStoragePath.matches('^uploadcare/[a-f0-9-]{20,40}$'))));
+    }
+
     match /users/{uid} {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['username', 'platform', 'platforms', 'createdAt'])
+        && request.resource.data.keys().hasOnly([
+          'username', 'platform', 'platforms', 'createdAt',
+          'favoriteSeriesName', 'favoriteGameName', 'favoriteSeriesImageUrl', 'favoriteGameImageUrl', 'favoriteSeriesStoragePath', 'favoriteGameStoragePath'
+        ])
         && request.resource.data.username is string
         && request.resource.data.username.matches('^[A-Za-z0-9_]{2,20}$')
         && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC']
@@ -40,9 +67,13 @@ service cloud.firestore {
         && request.resource.data.platforms.size() <= 3
         && request.resource.data.platform in request.resource.data.platforms
         && request.resource.data.platforms.hasOnly(['PlayStation', 'Xbox', 'PC'])
-        && request.resource.data.createdAt is int;
+        && request.resource.data.createdAt is int
+        && validFavorites(request.resource.data);
       allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username', 'platform', 'platforms', 'avatarUrl', 'avatarStoragePath'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'username', 'platform', 'platforms', 'avatarUrl', 'avatarStoragePath',
+          'favoriteSeriesName', 'favoriteGameName', 'favoriteSeriesImageUrl', 'favoriteGameImageUrl', 'favoriteSeriesStoragePath', 'favoriteGameStoragePath'
+        ])
         && request.resource.data.username is string
         && request.resource.data.username.matches('^[A-Za-z0-9_]{2,20}$')
         && request.resource.data.platform in ['PlayStation', 'Xbox', 'PC']
@@ -54,7 +85,8 @@ service cloud.firestore {
         && (!('avatarUrl' in request.resource.data) || validImage(request.resource.data.avatarUrl))
         && (!('avatarStoragePath' in request.resource.data) ||
           (request.resource.data.avatarStoragePath is string &&
-           request.resource.data.avatarStoragePath.matches('^uploadcare/[a-f0-9-]{20,40}$')));
+           request.resource.data.avatarStoragePath.matches('^uploadcare/[a-f0-9-]{20,40}$')))
+        && validFavorites(request.resource.data);
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
 
       // A unique server-verified UTC day per player prevents repeated check-ins.
