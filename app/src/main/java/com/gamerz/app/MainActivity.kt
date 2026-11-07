@@ -878,8 +878,7 @@ fun GamerzApp() {
                                             TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        db.collection("stories")
-                                                            .document(report["storyId"].toString()).delete().await()
+                                                        deleteGamerzMedia("story", report["storyId"].toString())
                                                         db.collection("storyReports")
                                                             .document(report["_id"].toString())
                                                             .update(mapOf(
@@ -1189,11 +1188,7 @@ fun GamerzApp() {
                                             if (post["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        val postRef = db.collection("posts").document(post["_id"].toString())
-                                                        for (collectionName in listOf("likes", "comments")) {
-                                                            for (item in postRef.collection(collectionName).get().await().documents) item.reference.delete().await()
-                                                        }
-                                                        postRef.delete().await()
+                                                        deleteGamerzMedia("post", post["_id"].toString())
                                                         refreshFeed(); message = "تم حذف المنشور"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف المنشور" }
                                                 }
@@ -1299,28 +1294,11 @@ fun GamerzApp() {
                             user.reauthenticate(EmailAuthProvider.getCredential(signedInEmail, deletePassword)).await()
                             val ownedPosts = db.collection("posts").whereEqualTo("uid", uid).get().await().documents
                             val ownedStories = db.collection("stories").whereEqualTo("uid", uid).get().await().documents
-                            val urls = ownedPosts.mapNotNull { it.getString("imageUrl") } +
-                                ownedStories.mapNotNull { it.getString("imageUrl") } + listOf(avatarUrl)
-                            val imagePaths = urls.mapNotNull { url ->
-                                if (!displayImageUrl(url).startsWith("https://26vsxjozef.ucarecd.net/")) null
-                                else {
-                                    val id = displayImageUrl(url).removePrefix("https://26vsxjozef.ucarecd.net/").substringBefore("/")
-                                    if (id.matches(Regex("[a-f0-9-]{20,40}"))) "uploadcare/" + id else null
-                                }
-                            }.distinct().take(500)
-                            db.collection("deletionRequests").add(mapOf(
-                                "uid" to uid,
-                                "imagePaths" to imagePaths,
-                                "status" to "pending",
-                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                            )).await()
-                            for (doc in ownedPosts) {
-                                for (collectionName in listOf("likes", "comments")) {
-                                    for (item in doc.reference.collection(collectionName).get().await().documents) item.reference.delete().await()
-                                }
-                                doc.reference.delete().await()
-                            }
-                            for (doc in ownedStories) doc.reference.delete().await()
+                            // The server validates ownership and removes Uploadcare media
+                            // before deleting each Firestore post or story.
+                            for (doc in ownedPosts) deleteGamerzMedia("post", doc.id)
+                            for (doc in ownedStories) deleteGamerzMedia("story", doc.id)
+                            if (avatarUrl.isNotBlank()) deleteGamerzMedia("avatar", uid)
                             // Remove private library, bookmarks and block-list records.
                             for (name in listOf("library")) {
                                 val docs = db.collection("users").document(uid)
@@ -1356,7 +1334,7 @@ fun GamerzApp() {
                             followedUsers = emptySet()
                             page = "feed"
                             showDeleteAccount = false
-                            message = "حُذف الحساب من Firebase؛ طلب إزالة الصور بانتظار المعالجة."
+                            message = "حُذف الحساب ووسائطه من Gamerz. إن كان لديك اشتراك فقم بإلغائه من Google Play."
                         } catch (e: Exception) {
                             message = "تعذر إكمال حذف الحساب: " + (e.localizedMessage ?: "راجع اتصالك وقواعد Firebase")
                         } finally {
@@ -1402,7 +1380,7 @@ fun GamerzApp() {
             onDeleteStory = { storyId ->
                 scope.launch {
                     try {
-                        db.collection("stories").document(storyId).delete().await()
+                        deleteGamerzMedia("story", storyId)
                         stories = stories.filterNot { it["_id"]?.toString() == storyId }
                         storyTarget = null
                         message = "تم حذف القصة من Gamerz"
