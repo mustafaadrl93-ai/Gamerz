@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,10 +28,27 @@ fun GamerzOrbitProfileHero(
     username: String, email: String, avatarUrl: String,
     platform: String, uid: String, db: FirebaseFirestore
 ) {
+    var membershipTier by remember(uid) { mutableStateOf("") }
+    DisposableEffect(uid, db) {
+        val registration = db.collection("entitlements").document(uid)
+            .addSnapshotListener { snapshot, _ ->
+                val expiresAt = snapshot?.getTimestamp("expiresAt")?.toDate()?.time ?: 0L
+                membershipTier = if (snapshot?.getBoolean("active") == true &&
+                    expiresAt > System.currentTimeMillis()) {
+                    snapshot.getString("tier").orEmpty()
+                } else ""
+            }
+        onDispose { registration.remove() }
+    }
+    val founderTone = when (membershipTier) {
+        "gamerz_sadeem" -> Color(0xFFFFD58C)
+        "gamerz_wamda" -> Color(0xFFCEA4FF)
+        else -> Color(0xFF71538D)
+    }
     Surface(
         shape = RoundedCornerShape(28.dp),
         color = Color(0xFF21172E),
-        border = BorderStroke(1.dp, Color(0xFF71538D))
+        border = BorderStroke(1.5.dp, founderTone)
     ) {
         Column(Modifier.fillMaxWidth()
             .background(Brush.linearGradient(listOf(
@@ -76,6 +94,22 @@ fun GamerzOrbitProfileHero(
                         style = MaterialTheme.typography.titleLarge,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     GamerzPlatformBadge(platform)
+                    if (membershipTier.isNotBlank()) {
+                        Surface(
+                            color = if (membershipTier == "gamerz_sadeem")
+                                Color(0xFF49371D) else Color(0xFF3D2558),
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Text(
+                                if (membershipTier == "gamerz_sadeem")
+                                    "✧ داعم Gamerz • سديم" else "✦ داعم Gamerz • ومضة",
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                color = founderTone,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
                     Text(email, color = Color(0xFFBFAFD1),
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
