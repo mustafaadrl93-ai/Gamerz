@@ -430,7 +430,8 @@ fun GamerzApp() {
                 Column(Modifier.fillMaxSize()) {
                     GamerzOrbitTopBar(
                         onActivity = { page = "activity" },
-                        onSearch = { page = "search" }
+                        onSearch = { page = "search" },
+                        onSecurity = { page = "change_password" }
                     )
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (page) {
@@ -544,6 +545,19 @@ fun GamerzApp() {
                             }, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9131D6))) { Text(if (busy) "جارٍ النشر..." else "نشر المنشور", fontWeight = FontWeight.Bold) }
                         }
                         "profile" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(
+                                onClick = { page = "change_password" },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF7545B7))
+                            ) {
+                                Icon(Icons.Default.Lock, contentDescription = null)
+                                Spacer(Modifier.width(10.dp))
+                                Text("🔐 الأمان • تغيير كلمة المرور",
+                                    fontWeight = FontWeight.Black,
+                                    style = MaterialTheme.typography.titleMedium)
+                            }
                             GamerzOrbitProfileHero(
                                 username = username, email = auth.currentUser?.email.orEmpty(),
                                 avatarUrl = avatarUrl, platform = platform,

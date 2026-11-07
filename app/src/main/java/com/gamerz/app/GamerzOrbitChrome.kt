@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,7 +24,13 @@ private val chromeText = Color(0xFFE9DFF5)
 private val chromeDim = Color(0xFFA79AB8)
 
 @Composable
-fun GamerzOrbitTopBar(onActivity: () -> Unit, onSearch: () -> Unit) {
+fun GamerzOrbitTopBar(onActivity: () -> Unit, onSearch: () -> Unit, onSecurity: () -> Unit) {
+    val context = LocalContext.current
+    val appVersion = remember(context) {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
+        } catch (_: Exception) { "?" }
+    }
     Row(
         Modifier.fillMaxWidth()
             .background(Brush.horizontalGradient(listOf(
@@ -49,10 +57,17 @@ fun GamerzOrbitTopBar(onActivity: () -> Unit, onSearch: () -> Unit) {
             Text("Gamerz", fontWeight = FontWeight.Black,
                 style = MaterialTheme.typography.headlineSmall,
                 color = Color.White)
-            Text("✦ مجتمع اللاعبين", style = MaterialTheme.typography.labelSmall,
+            Text("✦ إصدار " + appVersion, style = MaterialTheme.typography.labelSmall,
                 color = chromeBright)
         }
         Spacer(Modifier.weight(1f))
+        Surface(shape = CircleShape, color = Color(0xFF4F2C70)) {
+            IconButton(onClick = onSecurity) {
+                Icon(Icons.Default.Lock, contentDescription = "تغيير كلمة المرور",
+                    tint = Color(0xFFFFD99A))
+            }
+        }
+        Spacer(Modifier.width(5.dp))
         Surface(shape = CircleShape, color = Color(0xFF342244)) {
             IconButton(onClick = onSearch) {
                 Icon(Icons.Default.Search, contentDescription = "بحث",
@@ -80,7 +95,7 @@ fun GamerzOrbitBottomBar(page: String, onNavigate: (String) -> Unit) {
         horizontalArrangement = Arrangement.SpaceEvenly) {
         tabs.forEach { tab ->
             val selected = if (tab.key == "profile")
-                page in listOf("profile", "achievements", "library", "saved", "membership", "admin")
+                page in listOf("profile", "achievements", "library", "saved", "membership", "admin", "change_password")
                 else page == tab.key
             Column(
                 Modifier.weight(1f).clickable { onNavigate(tab.key) },
