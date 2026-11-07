@@ -54,15 +54,15 @@ private data class OrbitRank(
 
 // Nine original Gamerz ranks; #9 is reserved for the founder UID by design.
 private val orbitRanks = listOf(
-    OrbitRank(1, "شرارة", "كل ملحمة تبدأ بخطوة", 0, Color(0xFF94A1BA), Color(0xFF596C8E)),
-    OrbitRank(2, "نبضة", "أطلقت إشارتك الأولى", 80, Color(0xFF75DBE7), Color(0xFF237EA5)),
-    OrbitRank(3, "متتبع المدار", "مسارك بدأ يتضح", 250, Color(0xFF8FC9FF), Color(0xFF396ECC)),
-    OrbitRank(4, "صانع المسار", "تكتب إنجازاتك بنفسك", 650, Color(0xFFA9A0FF), Color(0xFF6656D4)),
-    OrbitRank(5, "كاسر الحاجز", "تجاوزت حدود البدايات", 1600, Color(0xFFEF9CFF), Color(0xFF9D4EC1)),
-    OrbitRank(6, "صانع الأمجاد", "أثرُك واضح في المجتمع", 3500, Color(0xFFFA94C3), Color(0xFFE0569D)),
-    OrbitRank(7, "حارس الأفق", "اسمك حاضر في الميدان", 7800, Color(0xFFFFBA79), Color(0xFFE16D43)),
-    OrbitRank(8, "أسطورة النواة", "مكانة تُبنى بجهد طويل", 18000, Color(0xFFFFD778), Color(0xFFE69F2E)),
-    OrbitRank(9, "مؤسس النواة", "بصمة البداية لا تغيب", Int.MAX_VALUE, Color(0xFFFFE9A5), Color(0xFFC99A52))
+    OrbitRank(1, "الوافد", "الحكاية تبدأ من هنا", 0, Color(0xFF94A1BA), Color(0xFF596C8E)),
+    OrbitRank(2, "جامع الشرر", "أولى إنجازاتك تصنع الفرق", 80, Color(0xFF75DBE7), Color(0xFF237EA5)),
+    OrbitRank(3, "سائر الدروب", "بصمتك تظهر بين اللاعبين", 250, Color(0xFF8FC9FF), Color(0xFF396ECC)),
+    OrbitRank(4, "قاهر العقبات", "كل تحدٍّ صار محطة عبور", 650, Color(0xFFA9A0FF), Color(0xFF6656D4)),
+    OrbitRank(5, "سيّد المهارة", "تجاربك تتحدث عن مستواك", 1600, Color(0xFFEF9CFF), Color(0xFF9D4EC1)),
+    OrbitRank(6, "نقّاش المجد", "تركت أثرًا يستحق التذكّر", 3500, Color(0xFFFA94C3), Color(0xFFE0569D)),
+    OrbitRank(7, "وارث الأساطير", "الطريق الطويل يصنع الأسماء", 7800, Color(0xFFFFBA79), Color(0xFFE16D43)),
+    OrbitRank(8, "تاج الميدان", "حضور يصعب تجاوزه", 18000, Color(0xFFFFD778), Color(0xFFE69F2E)),
+    OrbitRank(9, "صاحب الراية", "مؤسس عالم Gamerz", Int.MAX_VALUE, Color(0xFFFFE9A5), Color(0xFFC99A52))
 )
 
 private data class OrbitSnapshot(
@@ -342,7 +342,8 @@ private fun OrbitRankPreview(rank: OrbitRank, currentLevel: Int, isFounder: Bool
 fun GamerzOrbitRankHub(
     uid: String,
     db: FirebaseFirestore,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenPost: (Map<String, Any>) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     var snapshot by remember(uid) { mutableStateOf(OrbitSnapshot()) }
@@ -391,21 +392,21 @@ fun GamerzOrbitRankHub(
     val weekPlatinum = distinctPlatinum(weekPosts)
     val xpDecay = (totalScore - score).coerceAtLeast(0)
     val missions = listOf(
-        OrbitQuest("بصمة حضور", "سجّل دخولك اليوم إلى عالم Gamerz", "✦",
+        OrbitQuest("ختم اليوم", "اثبت وجودك اليوم في عالم Gamerz", "✦",
             if (checkedToday) 1 else 0, 1),
-        OrbitQuest("ثلاث نبضات", "سجّل حضورك 3 أيام هذا الأسبوع", "◈", weekCheckins, 3),
-        OrbitQuest("إيقاع ثابت", "حافظ على 7 أيام حضور في الأسبوع", "⚡", weekCheckins, 7),
-        OrbitQuest("أول رسالة", "انشر تجربة لعبة هذا الأسبوع", "✎", weekPosts.size, 1),
-        OrbitQuest("صوت المجتمع", "شارك 3 تجارب خلال الأسبوع", "✧", weekPosts.size, 3),
-        OrbitQuest("من قلب المغامرة", "أنهِ لعبة بنسبة 100%", "◆", weekCompleted, 1),
-        OrbitQuest("جامع النهايات", "أنهِ لعبتين مختلفتين هذا الأسبوع", "◇", weekCompleted, 2),
-        OrbitQuest("وهج الكأس", "سجّل كأسًا ذهبيًا هذا الأسبوع", "🏆", weekPlatinum, 1),
-        OrbitQuest("مجموعة الضوء", "سجّل كأسين ذهبيين مختلفين", "✴", weekPlatinum, 2),
-        OrbitQuest("دائرة الأصدقاء", "اجمع 3 متابعين في مجتمعك", "◎", snapshot.followers, 3),
-        OrbitQuest("صانع الصدى", "اجمع 10 متابعين في مجتمعك", "⟡", snapshot.followers, 10),
-        OrbitQuest("أثر واضح", "اجمع 5 إعجابات على منشوراتك الأخيرة", "♥", snapshot.likes, 5),
-        OrbitQuest("نبض الحوار", "استقبل 3 تعليقات على منشوراتك الأخيرة", "❋",
-            snapshot.comments, 3)
+        OrbitQuest("إصرار الأسبوع", "سجّل حضورك خمسة أيام هذا الأسبوع", "◈", weekCheckins, 5),
+        OrbitQuest("دون انقطاع", "أكمل سبعة أيام حضور في أسبوع واحد", "⚡", weekCheckins, 7),
+        OrbitQuest("صوت الناقد", "شارك ثلاث مراجعات متكاملة خلال الأسبوع", "✎", weekPosts.size, 3),
+        OrbitQuest("سجلّ المراجعين", "انشر خمس تجارب خلال أسبوع", "✧", weekPosts.size, 5),
+        OrbitQuest("حسم المواجهة", "أنهِ لعبتين مختلفتين هذا الأسبوع", "◆", weekCompleted, 2),
+        OrbitQuest("عابر العوالم", "أنهِ أربع ألعاب مختلفة خلال أسبوع", "◇", weekCompleted, 4),
+        OrbitQuest("صيد الكؤوس", "حقق بلاتينيوم في لعبتين مختلفتين", "🏆", weekPlatinum, 2),
+        OrbitQuest("جامع التيجان", "حقق ثلاث بلاتينيومات خلال أسبوع", "✴", weekPlatinum, 3),
+        OrbitQuest("حلقة الرفاق", "اجمع عشرة متابعين", "◎", snapshot.followers, 10),
+        OrbitQuest("رائد المجتمع", "اجمع خمسة وعشرين متابعًا", "⟡", snapshot.followers, 25),
+        OrbitQuest("صدى التجارب", "اجمع عشرين إعجابًا على تجاربك الأخيرة", "♥", snapshot.likes, 20),
+        OrbitQuest("حوار حيّ", "استقبل عشرة تعليقات على منشوراتك الأخيرة", "❋",
+            snapshot.comments, 10)
     )
     val completedMissions = missions.count { it.value >= it.goal }
 
@@ -602,6 +603,41 @@ fun GamerzOrbitRankHub(
                         color = orbitGold, fontWeight = FontWeight.ExtraBold)
                 }
             }
+        }
+        item {
+            Text("ألعابي الموثّقة", color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.titleLarge)
+            Text("اضغط على أي لعبة لعرض مراجعتك والتقييم والإيجابيات والسلبيات.",
+                color = orbitMuted, style = MaterialTheme.typography.bodySmall)
+        }
+        items(posts.sortedByDescending(::postEpoch).distinctBy(::normalizedGame).take(20)) { post ->
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable { onOpenPost(post) },
+                shape = RoundedCornerShape(17.dp),
+                color = Color(0xFF241A34),
+                border = BorderStroke(1.dp, Color(0xFF49385E))
+            ) {
+                Row(Modifier.fillMaxWidth().padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.SportsEsports, contentDescription = null, tint = orbitGold)
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(post["gameName"]?.toString().orEmpty(), color = Color.White,
+                            fontWeight = FontWeight.SemiBold)
+                        Text("التقييم: " + (post["rating"] ?: "—") + "/5  •  الإنجاز: " +
+                            (post["completion"] ?: 0) + "%", color = orbitMuted,
+                            style = MaterialTheme.typography.labelSmall)
+                    }
+                    Icon(Icons.Default.ChevronLeft, contentDescription = "فتح اللعبة",
+                        tint = orbitViolet)
+                }
+            }
+        }
+        item {
+            Text("مهام النخبة", color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.titleLarge)
         }
         items(missions) { quest -> QuestCard(quest) }
         if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = orbitViolet) }

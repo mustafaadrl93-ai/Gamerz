@@ -115,3 +115,38 @@ fun GamerzAccentButton(text: String, enabled: Boolean = true, onClick: () -> Uni
         Text(text, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
     }
 }
+
+/** Native Gamerz feature: encourages a balanced and useful game review. */
+@Composable
+fun GamerzReviewReadiness(pros: String, cons: String) {
+    val good = pros.trim().length >= 5
+    val bad = cons.trim().length >= 5
+    val completed = listOf(good, bad).count { it }
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = Color(0xFF231B35),
+        border = androidx.compose.foundation.BorderStroke(1.dp,
+            if (completed == 2) Color(0xFF5CA58C) else Color(0xFF654B8B))
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("ميزان المراجعة", color = Color(0xFFF0DFFF),
+                    fontWeight = FontWeight.Bold)
+                Text(if (completed == 2) "جاهزة للنشر ✓" else "مكتمل $completed/2",
+                    color = if (completed == 2) Color(0xFF8DE2BF)
+                        else Color(0xFFD5BAF3))
+            }
+            LinearProgressIndicator(
+                progress = { completed / 2f },
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                color = Color(0xFF9EDDC2),
+                trackColor = Color(0xFF443653),
+                drawStopIndicator = {}
+            )
+            Text("كل تجربة قوية تذكر ما أعجبك وما كان يمكن تحسينه.",
+                color = Color(0xFFC8B5D6), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}

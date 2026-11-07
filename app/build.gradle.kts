@@ -39,5 +39,6 @@ dependencies {
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("com.android.billingclient:billing:9.1.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

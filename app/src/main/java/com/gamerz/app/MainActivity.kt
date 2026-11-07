@@ -173,7 +173,9 @@ fun GamerzApp() {
     var searchPlatform by remember { mutableStateOf("all") }
     var searchOnlyCompleted by remember { mutableStateOf(false) }
     var storyTarget by remember { mutableStateOf<Map<String, Any>?>(null) }
-    var review by remember { mutableStateOf("") }
+    var pros by remember { mutableStateOf("") }
+    var cons by remember { mutableStateOf("") }
+    var selectedPost by remember { mutableStateOf<Map<String, Any>?>(null) }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var storyUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var storyCaption by remember { mutableStateOf("") }
@@ -512,7 +514,10 @@ fun GamerzApp() {
                                     }
                                 }
                             }
-                            OutlinedTextField(review, { review = it.take(500) }, label = { Text("رأيك باللعبة (اختياري)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                            OutlinedTextField(pros, { pros = it.take(500) }, label = { Text("إيجابيات اللعبة *") }, placeholder = { Text("وش الأشياء اللي أعجبتك؟") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(16.dp))
+                            OutlinedTextField(cons, { cons = it.take(500) }, label = { Text("سلبيات اللعبة *") }, placeholder = { Text("وش الأشياء اللي تحتاج تحسين؟") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(16.dp))
+                            Text("الإيجابيات والسلبيات مطلوبة لكل تقييم (5 أحرف على الأقل لكل خانة).", color = Color(0xFFCEB9E1), style = MaterialTheme.typography.labelSmall)
+                            GamerzReviewReadiness(pros, cons)
                             Button(enabled = !busy, onClick = {
                                 scope.launch {
                                     try {
@@ -521,6 +526,7 @@ fun GamerzApp() {
                                         require(postTitle.trim().length in 2..100) { "عنوان المنشور مطلوب (من حرفين إلى 100 حرف)" }
                                         require(game.isNotBlank() && percent in 0..100 && imageUri != null) { "اسم اللعبة والصورة ونسبة الإكمال مطلوبة" }
                                         require(rating in 1..5) { "يجب اختيار تقييم من 1 إلى 5 نجوم قبل النشر" }
+                                        require(pros.trim().length >= 5 && cons.trim().length >= 5) { "اكتب إيجابيات وسلبيات واضحة (5 أحرف على الأقل لكل خانة)" }
                                         val chosenPlatform = postPlatform.ifBlank { platform }
                                         require(chosenPlatform in selectedPlatforms) {
                                             "اختر منصة منشور من منصاتك المسجلة في الملف"
@@ -533,11 +539,11 @@ fun GamerzApp() {
                                             "uid" to currentUid, "platform" to chosenPlatform,
                                             "gameName" to game.trim(), "title" to postTitle.trim(), "completion" to percent, "rating" to rating,
                                             "imageUrl" to url, "storagePath" to uploadPath,
-                                            "pros" to review.trim().take(500), "cons" to "",
+                                            "pros" to pros.trim(), "cons" to cons.trim(),
                                             "platinum" to platinumClaim, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                             "likes" to 0, "commentCount" to 0
                                         )).await()
-                                        game = ""; postTitle = ""; completion = "0"; rating = 0; review = ""; imageUri = null; earnedPlatinum = false
+                                        game = ""; postTitle = ""; completion = "0"; rating = 0; pros = ""; cons = ""; imageUri = null; earnedPlatinum = false
                                         message = "تم نشر المنشور"; page = "feed"; refreshFeed()
                                     } catch (e: Exception) { message = e.localizedMessage ?: "فشل النشر" }
                                     finally { busy = false }
@@ -608,10 +614,20 @@ fun GamerzApp() {
                                 Icon(Icons.Default.Diamond, null,
                                     tint = Color(0xFFFFCC8E))
                                 Spacer(Modifier.width(9.dp))
-                                Text("عضوية Gamerz • استعراض الخطط القادمة")
+                                Text("عضوية Gamerz • الخطط والأسعار")
                             }
                             Text("قصصك النشطة: " + stories.count { it["uid"] == currentUid },
                                 style = MaterialTheme.typography.labelMedium, color = Color(0xFFB9ADC9))
+                            OutlinedButton(
+                                enabled = !busy,
+                                onClick = { page = "feed"; storyPicker.launch("image/*") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(Icons.Default.AutoStories, contentDescription = null)
+                                Spacer(Modifier.width(9.dp))
+                                Text("أضف قصة جديدة")
+                            }
                             OutlinedButton(enabled = !busy, onClick = { avatarPicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Default.Edit, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
@@ -663,7 +679,7 @@ fun GamerzApp() {
                             if (myPosts.isEmpty()) Text("لم تنشر ألعابًا بعد", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB9ADC9))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                                 items(myPosts) { post ->
-                                    Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF23182F))) {
+                                    Card(modifier = Modifier.clickable { selectedPost = post; page = "post_detail" }, shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF23182F))) {
                                         Column(Modifier.width(122.dp).padding(6.dp)) {
                                             AsyncImage(model = displayImageUrl(post["imageUrl"]), contentDescription = "غلاف اللعبة", contentScale = ContentScale.Crop,
                                                 modifier = Modifier.fillMaxWidth().height(105.dp).clip(RoundedCornerShape(10.dp)))
@@ -694,8 +710,9 @@ fun GamerzApp() {
                             TextButton(onClick = { auth.signOut(); loggedIn = false; profileLoaded = false; platform = ""; selectedPlatforms = emptySet(); avatarUrl = ""; page = "feed" }) { Text("تسجيل الخروج") }
                         }
                         "activity" -> GamerzActivityScreen(posts = posts, uid = currentUid, db = db, blockedUsers = blockedUsers)
-                        "achievements" -> GamerzOrbitRankHub(currentUid, db)
-                        "membership" -> GamerzMembershipPreview(onBack = { page = "profile" })
+                        "achievements" -> GamerzOrbitRankHub(currentUid, db, onOpenPost = { post -> selectedPost = post; page = "post_detail" })
+                        "post_detail" -> GamerzPostDetail(selectedPost, onBack = { page = "profile" })
+                        "membership" -> GamerzMembershipPreview(onBack = { page = "profile" }, uid = currentUid)
                         "change_password" -> GamerzChangePasswordScreen(onBack = { page = "profile" })
                         "library" -> GamerzLibraryScreen(currentUid, db)
                         "saved" -> GamerzSavedScreen(currentUid, db, blockedUsers) { playerUid ->
@@ -786,7 +803,7 @@ fun GamerzApp() {
                                     style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB9ADC9))
                             }
                             results.forEach { post ->
-                                Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF22192F))) {
+                                Card(modifier = Modifier.clickable { selectedPost = post; page = "post_detail" }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF22192F))) {
                                     Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                                         AsyncImage(model = displayImageUrl(post["imageUrl"]), contentDescription = "صورة لعبة",
                                             contentScale = ContentScale.Crop, modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp)))
@@ -872,8 +889,7 @@ fun GamerzApp() {
                                             TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        db.collection("stories")
-                                                            .document(report["storyId"].toString()).delete().await()
+                                                        deleteGamerzMedia("story", report["storyId"].toString())
                                                         db.collection("storyReports")
                                                             .document(report["_id"].toString())
                                                             .update(mapOf(
@@ -1151,7 +1167,8 @@ fun GamerzApp() {
                                                         fontWeight = FontWeight.Bold)
                                                 }
                                             }
-                                            if (!post["pros"]?.toString().isNullOrBlank()) Text(post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                                            if (!post["pros"]?.toString().isNullOrBlank()) Text("✓ الإيجابيات: " + post["pros"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium, color = Color(0xFF9BE5C6))
+                                            if (!post["cons"]?.toString().isNullOrBlank()) Text("− السلبيات: " + post["cons"]?.toString().orEmpty(), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFFFC29E))
                                         }
                                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                                             verticalAlignment = Alignment.CenterVertically) {
@@ -1182,11 +1199,7 @@ fun GamerzApp() {
                                             if (post["uid"] == currentUid || isOwner) TextButton(onClick = {
                                                 scope.launch {
                                                     try {
-                                                        val postRef = db.collection("posts").document(post["_id"].toString())
-                                                        for (collectionName in listOf("likes", "comments")) {
-                                                            for (item in postRef.collection(collectionName).get().await().documents) item.reference.delete().await()
-                                                        }
-                                                        postRef.delete().await()
+                                                        deleteGamerzMedia("post", post["_id"].toString())
                                                         refreshFeed(); message = "تم حذف المنشور"
                                                     } catch (e: Exception) { message = e.localizedMessage ?: "تعذر حذف المنشور" }
                                                 }
@@ -1292,28 +1305,11 @@ fun GamerzApp() {
                             user.reauthenticate(EmailAuthProvider.getCredential(signedInEmail, deletePassword)).await()
                             val ownedPosts = db.collection("posts").whereEqualTo("uid", uid).get().await().documents
                             val ownedStories = db.collection("stories").whereEqualTo("uid", uid).get().await().documents
-                            val urls = ownedPosts.mapNotNull { it.getString("imageUrl") } +
-                                ownedStories.mapNotNull { it.getString("imageUrl") } + listOf(avatarUrl)
-                            val imagePaths = urls.mapNotNull { url ->
-                                if (!displayImageUrl(url).startsWith("https://26vsxjozef.ucarecd.net/")) null
-                                else {
-                                    val id = displayImageUrl(url).removePrefix("https://26vsxjozef.ucarecd.net/").substringBefore("/")
-                                    if (id.matches(Regex("[a-f0-9-]{20,40}"))) "uploadcare/" + id else null
-                                }
-                            }.distinct().take(500)
-                            db.collection("deletionRequests").add(mapOf(
-                                "uid" to uid,
-                                "imagePaths" to imagePaths,
-                                "status" to "pending",
-                                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                            )).await()
-                            for (doc in ownedPosts) {
-                                for (collectionName in listOf("likes", "comments")) {
-                                    for (item in doc.reference.collection(collectionName).get().await().documents) item.reference.delete().await()
-                                }
-                                doc.reference.delete().await()
-                            }
-                            for (doc in ownedStories) doc.reference.delete().await()
+                            // The server validates ownership and removes Uploadcare media
+                            // before deleting each Firestore post or story.
+                            for (doc in ownedPosts) deleteGamerzMedia("post", doc.id)
+                            for (doc in ownedStories) deleteGamerzMedia("story", doc.id)
+                            if (avatarUrl.isNotBlank()) deleteGamerzMedia("avatar", uid)
                             // Remove private library, bookmarks and block-list records.
                             for (name in listOf("library")) {
                                 val docs = db.collection("users").document(uid)
@@ -1349,7 +1345,7 @@ fun GamerzApp() {
                             followedUsers = emptySet()
                             page = "feed"
                             showDeleteAccount = false
-                            message = "حُذف الحساب من Firebase؛ طلب إزالة الصور بانتظار المعالجة."
+                            message = "حُذف الحساب ووسائطه من Gamerz. إن كان لديك اشتراك فقم بإلغائه من Google Play."
                         } catch (e: Exception) {
                             message = "تعذر إكمال حذف الحساب: " + (e.localizedMessage ?: "راجع اتصالك وقواعد Firebase")
                         } finally {
@@ -1395,7 +1391,7 @@ fun GamerzApp() {
             onDeleteStory = { storyId ->
                 scope.launch {
                     try {
-                        db.collection("stories").document(storyId).delete().await()
+                        deleteGamerzMedia("story", storyId)
                         stories = stories.filterNot { it["_id"]?.toString() == storyId }
                         storyTarget = null
                         message = "تم حذف القصة من Gamerz"

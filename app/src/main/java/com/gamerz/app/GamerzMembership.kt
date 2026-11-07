@@ -25,7 +25,7 @@ private data class OrbitPlan(
 )
 
 @Composable
-fun GamerzMembershipPreview(onBack: () -> Unit) {
+fun GamerzMembershipPreview(onBack: () -> Unit, uid: String) {
     val plans = listOf(
         OrbitPlan(
             "Gamerz الأساس", "مجتمع الألعاب للجميع", "✦",
@@ -33,15 +33,15 @@ fun GamerzMembershipPreview(onBack: () -> Unit) {
             Color(0xFF8DE6C4), true
         ),
         OrbitPlan(
-            "Gamerz ومضة", "هوية شخصية أكثر تميزًا", "✧",
-            listOf("إطارات شخصية حصرية من تصميم Gamerz",
-                "خيارات ألوان إضافية للبروفايل", "أدوات تخصيص تجميلية"),
+            "Gamerz ومضة", "دعم المجتمع بهوية مميزة", "✧",
+            listOf("وسام داعم ومضة ظاهر في الملف الشخصي",
+                "تمييز إطار الملف بلون بنفسجي", "جميع المهام والإنجازات تبقى مجانية"),
             Color(0xFFCE9EFF), false
         ),
         OrbitPlan(
-            "Gamerz سديم", "مساحة إبداع إضافية", "◇",
-            listOf("ثيمات للبروفايل", "إحصاءات شخصية موسعة",
-                "مجموعة أوسع من عناصر التخصيص"),
+            "Gamerz سديم", "هوية داعم بلون ذهبي", "◇",
+            listOf("وسام داعم سديم في ملفك", "إطار هوية ذهبي مميز",
+                "تمييز مرئي دون أي امتياز على بقية اللاعبين"),
             Color(0xFFFFC98E), false
         )
     )
@@ -58,7 +58,7 @@ fun GamerzMembershipPreview(onBack: () -> Unit) {
                 color = Color.White,
                 fontWeight = FontWeight.Black,
                 style = MaterialTheme.typography.headlineMedium)
-            Text("تصوّر أولي للمزايا — لا توجد اشتراكات مدفوعة مفعّلة الآن",
+            Text("خطط اختيارية — الدفع الآمن مباشرة من Google Play عند تفعيل المنتجات",
                 color = Color(0xFFB8A9CB),
                 style = MaterialTheme.typography.bodySmall)
         }
@@ -89,7 +89,7 @@ fun GamerzMembershipPreview(onBack: () -> Unit) {
                         }
                         Surface(shape = CircleShape,
                             color = if (plan.active) Color(0xFF234B43) else Color(0xFF40344A)) {
-                            Text(if (plan.active) "مجاني" else "قريبًا",
+                            Text(if (plan.active) "مجاني" else "Google Play",
                                 color = if (plan.active) Color(0xFF9CF6D8) else Color(0xFFE0CCE9),
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                                 style = MaterialTheme.typography.labelSmall,
@@ -120,12 +120,13 @@ fun GamerzMembershipPreview(onBack: () -> Unit) {
                     Text("التحديات والرتب الأساسية متاحة للجميع. أي اشتراك مستقبلي سيكون منفصلًا عن نقاط الإنجاز، ولن يغيّر رتبة المؤسس.",
                         color = Color(0xFFD7C4E4),
                         style = MaterialTheme.typography.bodySmall)
-                    Text("سيظهر السعر الحقيقي وشروط التجديد والإلغاء بعد تفعيل نظام الدفع رسميًا.",
+                    Text("يعرض متجر Google Play السعر الحقيقي وشروط التجديد والإلغاء عند توفر الاشتراك.",
                         color = Color(0xFFBAABCA),
                         style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
+        item { GamerzBillingControls(uid) }
         item {
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(15.dp)) {
