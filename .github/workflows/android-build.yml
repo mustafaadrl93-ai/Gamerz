@@ -38,6 +38,7 @@ jobs:
         run: |
           node --check netlify/functions/delete-media.mjs
           node --check netlify/functions/verify-subscription.mjs
+          node --check netlify/functions/cleanup-stories.mjs
 
       - name: Build debug APK
         run: gradle assembleDebug
