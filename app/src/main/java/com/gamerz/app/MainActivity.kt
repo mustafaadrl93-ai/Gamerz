@@ -517,6 +517,7 @@ fun GamerzApp() {
                             OutlinedTextField(pros, { pros = it.take(500) }, label = { Text("إيجابيات اللعبة *") }, placeholder = { Text("وش الأشياء اللي أعجبتك؟") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(16.dp))
                             OutlinedTextField(cons, { cons = it.take(500) }, label = { Text("سلبيات اللعبة *") }, placeholder = { Text("وش الأشياء اللي تحتاج تحسين؟") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(16.dp))
                             Text("الإيجابيات والسلبيات مطلوبة لكل تقييم (5 أحرف على الأقل لكل خانة).", color = Color(0xFFCEB9E1), style = MaterialTheme.typography.labelSmall)
+                            GamerzReviewReadiness(pros, cons)
                             Button(enabled = !busy, onClick = {
                                 scope.launch {
                                     try {
@@ -617,6 +618,16 @@ fun GamerzApp() {
                             }
                             Text("قصصك النشطة: " + stories.count { it["uid"] == currentUid },
                                 style = MaterialTheme.typography.labelMedium, color = Color(0xFFB9ADC9))
+                            OutlinedButton(
+                                enabled = !busy,
+                                onClick = { page = "feed"; storyPicker.launch("image/*") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(Icons.Default.AutoStories, contentDescription = null)
+                                Spacer(Modifier.width(9.dp))
+                                Text("أضف قصة جديدة")
+                            }
                             OutlinedButton(enabled = !busy, onClick = { avatarPicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Default.Edit, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
