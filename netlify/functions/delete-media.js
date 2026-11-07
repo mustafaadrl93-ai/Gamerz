@@ -36,6 +36,10 @@ exports.handler = async (event) => {
     if (!authResponse.ok) return reply(401, { error: "Invalid or expired sign-in" });
     const user = (await authResponse.json()).users?.[0];
     if (!user?.localId) return reply(401, { error: "Invalid sign-in" });
+    // Safety gate: unsigned Uploadcare uploads do not prove file ownership. Until
+    // signed uploads and a trusted upload registry are added, only the project
+    // owner may trigger remote deletion to prevent cross-user file removal.
+    if (user.localId !== OWNER_UID) return reply(403, { error: "Media deletion is not enabled for this account yet" });
 
     const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${type}/${id}`;
     const firestoreHeaders = { authorization: `Bearer ${token}` };
