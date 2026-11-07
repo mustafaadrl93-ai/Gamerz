@@ -388,6 +388,13 @@ fun GamerzPublicProfileSheet(
             Text(name, style = MaterialTheme.typography.headlineSmall,
                 color = Color.White, fontWeight = FontWeight.ExtraBold)
             GamerzPlatformBadge(profile["platform"]?.toString().orEmpty())
+            GamerzFavoriteBadges(
+                seriesName = profile["favoriteSeriesName"]?.toString().orEmpty(),
+                seriesImageUrl = profile["favoriteSeriesImageUrl"]?.toString().orEmpty(),
+                gameName = profile["favoriteGameName"]?.toString().orEmpty(),
+                gameImageUrl = profile["favoriteGameImageUrl"]?.toString().orEmpty(),
+                modifier = Modifier.fillMaxWidth()
+            )
             GamerzPlatinumCounter(targetUid, db)
             GamerzOrbitRankPill(targetUid, db)
             GamerzFollowStats(targetUid, db, Modifier.fillMaxWidth(), refreshKey)
